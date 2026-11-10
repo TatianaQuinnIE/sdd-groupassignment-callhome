@@ -1,4 +1,4 @@
-#Request logging middleware. Logs each line for every HTTP request.
+# Request logging middleware. Logs each line for every HTTP request.
 import logging
 import time
 

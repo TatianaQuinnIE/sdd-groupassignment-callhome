@@ -1,4 +1,4 @@
-#SQL migrations runner
+# SQL migrations runner
 
 import logging
 import time
@@ -54,7 +54,7 @@ def run_with_retry(
                 return apply_migrations(conn)
             finally:
                 conn.close()
-        except Exception as exc:  
+        except Exception as exc:
             last_error = exc
             logger.warning("database not ready (attempt %d/%d): %s", attempt, attempts, exc)
             sleep(delay)

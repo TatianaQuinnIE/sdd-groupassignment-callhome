@@ -12,7 +12,7 @@ from app import db, migrations
 from app.config import Settings
 from app.logging_middleware import RequestLogMiddleware
 
-#Root login
+# Root login
 logging.basicConfig(
     level=logging.INFO, stream=sys.stdout, format="%(asctime)s %(levelname)s %(name)s %(message)s"
 )

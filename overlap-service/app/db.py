@@ -1,4 +1,4 @@
-#SQL Local and Azure SQL Database 
+# SQL Local and Azure SQL Database
 import pymssql
 
 from app.config import Settings

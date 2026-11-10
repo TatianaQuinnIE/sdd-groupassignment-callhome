@@ -28,9 +28,7 @@ class Settings:
     nager_base_url: str = field(
         default_factory=lambda: os.getenv("NAGER_BASE_URL", "https://date.nager.at/api/v3")
     )
-    nager_timeout_s: float = field(
-        default_factory=lambda: float(os.getenv("NAGER_TIMEOUT_S", "3"))
-    )
+    nager_timeout_s: float = field(default_factory=lambda: float(os.getenv("NAGER_TIMEOUT_S", "3")))
 
     @property
     def db_configured(self) -> bool:
