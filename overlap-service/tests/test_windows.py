@@ -29,6 +29,7 @@ def person(tz, sleep=("23:00", "07:00"), busy=(), preferred=None):
 def spans(windows):
     return [(window.start, window.end) for window in windows]
 
+
 # What if one person is in Madird and wants to find a time window with someone from Seoul
 def test_basic_window_for_madrid_and_seoul():
     windows = find_windows(person("Europe/Madrid"), person("Asia/Seoul"), 30, utc(11, 16), 1)
@@ -42,6 +43,7 @@ def test_window_can_be_converted_to_local_time():
     seoul_start, seoul_end = window.in_zone("Asia/Seoul")
     assert (madrid_start.hour, madrid_end.hour) == (7, 15)
     assert (seoul_start.hour, seoul_end.hour) == (15, 23)
+
 
 # Test when they have added a busy block or do not disturb
 def test_busy_block_removes_that_time():
@@ -82,6 +84,7 @@ def test_window_is_cut_at_now():
     windows = find_windows(person("Europe/Madrid"), person("Asia/Seoul"), 30, utc(11, 16, 8), 1)
     assert windows[0].start == utc(11, 16, 8)
     assert windows[0].end == utc(11, 16, 14)
+
 
 # The daylight saving changed at a different day in madrid and in new york
 def test_daylight_saving_changes_the_window_start():

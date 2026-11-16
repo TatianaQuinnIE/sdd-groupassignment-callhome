@@ -1,15 +1,13 @@
-""" 
+"""
 This is the algorithm behind the app.
 It find the time windows when two people can both take a call.
-It works by converting each person’s local unavailable times, 
+It works by converting each person’s local unavailable times,
 like sleep, busy blocks, and outside preferred hours,
-into UTC. Then it removes those blocked times from 
-the full time range and keeps only the free stretches 
+into UTC. Then it removes those blocked times from
+the full time range and keeps only the free stretches
 that are long enough for the call.
 
 """
-
-
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
