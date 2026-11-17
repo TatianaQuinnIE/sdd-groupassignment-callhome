@@ -19,6 +19,20 @@ param sqlAdminLogin string = 'sqladmin-${prefix}'
 @secure()
 param sqlAdminPassword string
 
+@description('Password of the contacts_app database user. Also stored as a GitHub secret for the pipeline.')
+@secure()
+param contactsDbPassword string
+
+@description('Password of the overlap_app database user. Also stored as a GitHub secret for the pipeline.')
+@secure()
+param overlapDbPassword string
+
+@description('Image for both apps at first setup. The pipeline replaces it with ghcr.io/<owner>/<service>:<commit SHA>.')
+param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
+
+@description('Port the container listens on. The placeholder listens on 80; our FastAPI images listen on 8000, and the first pipeline deploy switches it.')
+param targetPort int = 80
+
 // ---------------------------------------------------------------------------
 // Monitoring: Log Analytics workspace
 // ---------------------------------------------------------------------------
@@ -116,6 +130,135 @@ resource dbs 'Microsoft.Sql/servers/databases@2023-08-01-preview' = [
   }
 ]
 
+// ---------------------------------------------------------------------------
+// Static Web App for the UI
+// ---------------------------------------------------------------------------
+// Free tier, one per group, named <prefix>-ui as the brief requires. Its
+// address is the only origin the services accept (CORS).
+
+resource ui 'Microsoft.Web/staticSites@2023-12-01' = {
+  name: '${prefix}-ui'
+  location: location
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {}
+}
+
+var uiOrigin = 'https://${ui.properties.defaultHostname}'
+var sqlHost = sql.properties.fullyQualifiedDomainName
+
+// ---------------------------------------------------------------------------
+// Container Apps: one per service
+// ---------------------------------------------------------------------------
+// Scale to zero, at most 1 replica, smallest size. Configuration comes only
+// from environment variables; the database password is a Container Apps
+// secret, referenced with secretRef so it never shows in plain text.
+// CORS is handled in the FastAPI code (CORS_ORIGINS), not by the ingress:
+// the ingress CORS setting breaks POST/PUT preflights from the browser.
+
+resource contacts 'Microsoft.App/containerApps@2024-03-01' = {
+  name: '${prefix}-contacts'
+  location: location
+  properties: {
+    managedEnvironmentId: env.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: targetPort
+        transport: 'auto'
+      }
+      secrets: [
+        {
+          name: 'db-password'
+          value: contactsDbPassword
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'contacts-service'
+          image: placeholderImage
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          env: [
+            { name: 'DB_HOST', value: sqlHost }
+            { name: 'DB_PORT', value: '1433' }
+            { name: 'DB_NAME', value: '${prefix}-contacts-db' }
+            { name: 'DB_USER', value: 'contacts_app' }
+            { name: 'DB_PASSWORD', secretRef: 'db-password' }
+            { name: 'CORS_ORIGINS', value: uiOrigin }
+            { name: 'RUN_MIGRATIONS', value: 'true' }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 1
+      }
+    }
+  }
+}
+
+resource overlap 'Microsoft.App/containerApps@2024-03-01' = {
+  name: '${prefix}-overlap'
+  location: location
+  properties: {
+    managedEnvironmentId: env.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: targetPort
+        transport: 'auto'
+      }
+      secrets: [
+        {
+          name: 'db-password'
+          value: overlapDbPassword
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'overlap-service'
+          image: placeholderImage
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          env: [
+            { name: 'DB_HOST', value: sqlHost }
+            { name: 'DB_PORT', value: '1433' }
+            { name: 'DB_NAME', value: '${prefix}-overlap-db' }
+            { name: 'DB_USER', value: 'overlap_app' }
+            { name: 'DB_PASSWORD', secretRef: 'db-password' }
+            { name: 'CORS_ORIGINS', value: uiOrigin }
+            { name: 'RUN_MIGRATIONS', value: 'true' }
+            { name: 'CONTACTS_SERVICE_URL', value: 'https://${contacts.properties.configuration.ingress.fqdn}' }
+            { name: 'CONTACTS_TIMEOUT_S', value: '3' }
+            { name: 'NAGER_BASE_URL', value: 'https://date.nager.at/api/v3' }
+            { name: 'NAGER_TIMEOUT_S', value: '3' }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 1
+      }
+    }
+  }
+}
+
 output logAnalyticsWorkspace string = logs.name
 output containerAppsEnvironment string = env.name
 output sqlServerHost string = sql.properties.fullyQualifiedDomainName
+output uiUrl string = uiOrigin
+output contactsUrl string = 'https://${contacts.properties.configuration.ingress.fqdn}'
+output overlapUrl string = 'https://${overlap.properties.configuration.ingress.fqdn}'
