@@ -33,9 +33,7 @@ param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 @description('Port the container listens on. The placeholder listens on 80; our FastAPI images listen on 8000, and the first pipeline deploy switches it.')
 param targetPort int = 80
 
-// ---------------------------------------------------------------------------
 // Monitoring: Log Analytics workspace
-// ---------------------------------------------------------------------------
 // The Container Apps environment sends every container's stdout here, so the
 // request log lines (method, path, status, duration) can be queried with KQL.
 // The daily cap keeps log volume and cost low, as the brief asks.
@@ -54,9 +52,7 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Container Apps environment (Consumption plan)
-// ---------------------------------------------------------------------------
 // Both services run in this one environment. Consumption means we pay only
 // while a container is running, and the apps can scale to zero.
 
@@ -74,11 +70,9 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// ---------------------------------------------------------------------------
 // SQL server and one serverless database per service
-// ---------------------------------------------------------------------------
 // One logical server, two databases: each service owns its own data and only
-// gets a user for its own database. Serverless General Purpose, 0.5–1 vCore,
+// gets a user for its own database. Serverless General Purpose, 0.5-1 vCore,
 // auto-pause after 15 minutes and 2 GB max, as the professor's guide sets for
 // the group subscription (no free offer there).
 
@@ -130,9 +124,7 @@ resource dbs 'Microsoft.Sql/servers/databases@2023-08-01-preview' = [
   }
 ]
 
-// ---------------------------------------------------------------------------
 // Static Web App for the UI
-// ---------------------------------------------------------------------------
 // Free tier, one per group, named <prefix>-ui as the brief requires. Its
 // address is the only origin the services accept (CORS).
 
@@ -149,9 +141,7 @@ resource ui 'Microsoft.Web/staticSites@2023-12-01' = {
 var uiOrigin = 'https://${ui.properties.defaultHostname}'
 var sqlHost = sql.properties.fullyQualifiedDomainName
 
-// ---------------------------------------------------------------------------
 // Container Apps: one per service
-// ---------------------------------------------------------------------------
 // Scale to zero, at most 1 replica, smallest size. Configuration comes only
 // from environment variables; the database password is a Container Apps
 // secret, referenced with secretRef so it never shows in plain text.

@@ -67,11 +67,11 @@ subscription, and is defined in [`infra/main.bicep`](infra/main.bicep).
 | --- | --- | --- |
 | Log Analytics workspace | `sdd-3b-g5-logs` | 30-day retention, 1 GB/day cap |
 | Container Apps environment | `sdd-3b-g5-env` | Consumption plan, logs to the workspace above |
-| Container App | `sdd-3b-g5-contacts` | 0–1 replicas, 0.25 vCPU, 0.5 GiB |
-| Container App | `sdd-3b-g5-overlap` | 0–1 replicas, 0.25 vCPU, 0.5 GiB |
+| Container App | `sdd-3b-g5-contacts` | 0-1 replicas, 0.25 vCPU, 0.5 GiB |
+| Container App | `sdd-3b-g5-overlap` | 0-1 replicas, 0.25 vCPU, 0.5 GiB |
 | SQL server | `sdd-3b-g5-sql` | TLS 1.2+, firewall: Azure services only |
-| SQL database | `sdd-3b-g5-contacts-db` | Serverless Gen5 0.5–1 vCore, auto-pause 15 min, 2 GB |
-| SQL database | `sdd-3b-g5-overlap-db` | Serverless Gen5 0.5–1 vCore, auto-pause 15 min, 2 GB |
+| SQL database | `sdd-3b-g5-contacts-db` | Serverless Gen5 0.5-1 vCore, auto-pause 15 min, 2 GB |
+| SQL database | `sdd-3b-g5-overlap-db` | Serverless Gen5 0.5-1 vCore, auto-pause 15 min, 2 GB |
 | Static Web App | `sdd-3b-g5-ui` | Free tier |
 
 Configuration reaches the services only through environment variables. Database
