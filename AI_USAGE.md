@@ -7,3 +7,4 @@ Dockerfiles and Bicep). Add rows as you go, not on the last day.
 | Luna | Asked Claude to match my code of overlap-service to Alexandra's code contacts-service | Claude (Sonnet 5.5) | Compared code with contacts-service, fixed a bug that caused duplicate entries in schema_migrations, added httpx2 to developer requirements to fix test failures. |
 | | | | |
 | Tatiana | CI workflow and sprint-0.md | Claude Code (Opus 5.5) | Read both files and filled in the Scrum roles |
+| Tatiana | CI checks (coverage gate, Bandit, pip-audit, gitleaks), definition-of-done.md, Sprint 0 review | Claude Code (Opus 5.5) | Read all three files before committing |
