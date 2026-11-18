@@ -41,8 +41,8 @@ param overlapDbPassword string
 @description('Image for both apps at first setup. The pipeline replaces it with ghcr.io/<owner>/<service>:<commit SHA>.')
 param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
-@description('Port the container listens on. The placeholder listens on 80; our FastAPI images listen on 8000, and the first pipeline deploy switches it.')
-param targetPort int = 80
+@description('Port the container listens on. Our FastAPI images listen on 8000. The placeholder image listens on 80, so pass targetPort=80 for the very first setup only.')
+param targetPort int = 8000
 
 // Monitoring: Log Analytics workspace
 // The Container Apps environment sends every container's stdout here, so the
