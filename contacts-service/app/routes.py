@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.repository import ContactsRepository
-from app.schemas import ContactIn, ContactOut
+from app.schemas import CallIn, CallOut, ContactIn, ContactOut
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
@@ -51,4 +51,27 @@ def update_contact(contact_id: int, body: ContactIn, repo: Repo):
 def delete_contact(contact_id: int, repo: Repo):
     if not repo.delete_contact(contact_id):
         raise not_found(contact_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{contact_id}/calls", response_model=list[CallOut])
+def list_calls(contact_id: int, repo: Repo):
+    calls = repo.list_calls(contact_id)
+    if calls is None:
+        raise not_found(contact_id)
+    return calls
+
+
+@router.post("/{contact_id}/calls", response_model=CallOut, status_code=status.HTTP_201_CREATED)
+def add_call(contact_id: int, body: CallIn, repo: Repo):
+    call = repo.add_call(contact_id, body.model_dump())
+    if call is None:
+        raise not_found(contact_id)
+    return call
+
+
+@router.delete("/{contact_id}/calls/{call_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_call(contact_id: int, call_id: int, repo: Repo):
+    if not repo.delete_call(contact_id, call_id):
+        raise HTTPException(status_code=404, detail=f"Call {call_id} not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

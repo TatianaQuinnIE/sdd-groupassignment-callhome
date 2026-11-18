@@ -1,6 +1,6 @@
 """Request and response shapes for the API, with validation."""
 
-from datetime import datetime, time
+from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -41,3 +41,32 @@ class ContactOut(ContactIn):
     id: int
     created_at: datetime
     updated_at: datetime
+    last_called: datetime | None = None
+
+
+class CallIn(BaseModel):
+    """A call you made. called_at defaults to now; times without a zone are read as UTC."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    called_at: datetime | None = None
+    minutes: int | None = Field(default=None, ge=1, le=600)
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("called_at")
+    @classmethod
+    def utc_and_not_future(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        value = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        if value > datetime.now(UTC):
+            raise ValueError("called_at cannot be in the future")
+        return value
+
+
+class CallOut(BaseModel):
+    id: int
+    contact_id: int
+    called_at: datetime
+    minutes: int | None
+    note: str | None
