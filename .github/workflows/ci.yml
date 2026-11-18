@@ -1,9 +1,12 @@
 name: CI
 
+# On main, CI runs only as the first job of deploy.yml (workflow_call), so it
+# does not run twice and nothing is deployed unless every check passes.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches-ignore: [main]
+  workflow_call:
 
 permissions:
   contents: read
@@ -82,4 +85,12 @@ jobs:
         run: |
           for service in $SERVICES; do
             .tools/bin/pip-audit -r "$service/requirements.txt"
+          done
+
+      # The same Dockerfiles deploy.yml pushes to GHCR: a broken image fails the PR,
+      # not the deploy.
+      - name: Docker build
+        run: |
+          for service in $SERVICES; do
+            docker build --tag "$service:ci" "$service"
           done
