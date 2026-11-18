@@ -18,6 +18,7 @@ ROW = {
     "call_every_days": 7,
     "created_at": datetime(2026, 11, 17, 10, 0),
     "updated_at": "2026-11-17 10:00:00.1234567",
+    "last_called": None,
 }
 
 DATA = {k: v for k, v in ROW.items() if k in repository.FIELDS} | {"sleep_start": time(22, 30)}
@@ -86,12 +87,17 @@ def test_create_sends_values_in_column_order():
     assert params == ("Mum", "Seoul", "Asia/Seoul", "KR", "22:30:00", "06:30:00", 45, 7)
 
 
-def test_update_found_and_missing():
+def test_update_reads_back_the_contact():
     repo, conn = make_repo()
     assert repo.update_contact(1, DATA)["id"] == 1
     assert conn.cur.calls[0][1][-1] == 1  # id goes last, for WHERE
-    repo, _ = make_repo(rows=[])
+    assert conn.cur.calls[1][1] == (1,)  # then read it back with last_called
+
+
+def test_update_missing_contact():
+    repo, conn = make_repo(rowcount=0)
     assert repo.update_contact(9, DATA) is None
+    assert len(conn.cur.calls) == 1
 
 
 def test_delete_uses_rowcount():
@@ -119,3 +125,49 @@ def test_connection_closed_even_on_error():
     with pytest.raises(RuntimeError):
         repo.list_contacts()
     assert conn.closed and not conn.committed
+
+
+def test_last_called_converted_to_utc():
+    repo, _ = make_repo(rows=[ROW | {"last_called": datetime(2026, 11, 16, 20, 0)}])
+    assert repo.get_contact(1)["last_called"] == datetime(2026, 11, 16, 20, 0, tzinfo=UTC)
+
+
+CALL = {
+    "id": 5,
+    "contact_id": 1,
+    "called_at": datetime(2026, 11, 16, 20, 0),
+    "minutes": 30,
+    "note": None,
+}
+
+
+def test_list_calls_checks_contact_first():
+    repo, conn = make_repo(rows=[dict(CALL)])
+    [call] = repo.list_calls(1)
+    assert call["called_at"].tzinfo is UTC
+    assert "FROM contacts" in conn.cur.calls[0][0]
+    assert "FROM call_logs" in conn.cur.calls[1][0]
+
+
+def test_calls_for_missing_contact_are_none():
+    repo, conn = make_repo(rows=[])
+    assert repo.list_calls(9) is None
+    assert repo.add_call(9, {}) is None
+
+
+def test_add_call_sends_utc_text_or_null():
+    repo, conn = make_repo(rows=[dict(CALL)])
+    when = datetime(2026, 11, 16, 21, 0, tzinfo=repository.UTC)
+    repo.add_call(1, {"called_at": when, "minutes": 30, "note": "Birthday"})
+    assert conn.cur.calls[1][1] == (1, "2026-11-16 21:00:00.000000", 30, "Birthday")
+    repo, conn = make_repo(rows=[dict(CALL)])
+    repo.add_call(1, {})
+    assert conn.cur.calls[1][1] == (1, None, None, None)  # database fills in now
+
+
+def test_delete_call_matches_contact_too():
+    repo, conn = make_repo(rowcount=1)
+    assert repo.delete_call(1, 5) is True
+    assert conn.cur.calls[0][1] == (5, 1)
+    repo, _ = make_repo(rowcount=0)
+    assert repo.delete_call(1, 5) is False
