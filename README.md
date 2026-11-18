@@ -106,6 +106,33 @@ anything. No password is ever written in the repository.
 Still to do: one database user per service (`contacts_app`, `overlap_app`), the federated
 credential for the pipeline identity, and the GitHub secrets.
 
+## Deployment pipeline
+
+`.github/workflows/deploy.yml` runs on every push to `main`:
+
+1. Runs the whole of `ci.yml` (lint, format, tests with the 70% gate, Bandit, pip-audit,
+   gitleaks, Docker build). If anything fails, nothing is deployed. On `main`, CI runs only
+   from here, so it does not run twice.
+2. Builds both images and pushes them to GHCR as
+   `ghcr.io/tatianaquinnie/<service>:<commit SHA>` (owner in lowercase, `provenance: false`).
+3. Signs in to Azure as the managed identity `sdd-3b-g5-github` with OIDC (no Azure
+   password stored in GitHub).
+4. For each Container App (contacts first): sets the database password secret, sets the
+   target port to 8000 and switches the image to the new SHA.
+5. Writes `ui/config.js` with both service addresses and uploads `ui/` to the `$web`
+   container of the storage account `UI_STORAGE` (static website).
+6. Calls `/health` on both services for up to 3 minutes and fails the run if the new
+   revision never returns 200.
+
+GitHub secrets it needs (Settings › Secrets and variables › Actions): `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `CONTACTS_DB_PASSWORD`, `OVERLAP_DB_PASSWORD`.
+Variables: `PREFIX`, `RESOURCE_GROUP` and `UI_STORAGE` (default `sdd-3b-g5`, `rg-sdd-3b-g5`
+and `sdd3bg5ui`).
+
+First deploy only: GHCR packages start private, so Azure cannot pull them. After the first
+run, open each package (`contacts-service`, `overlap-service`) in GitHub › Packages ›
+Package settings, change visibility to Public, and re-run the failed job.
+
 ## Rules
 
 - No direct pushes to `main`. Every change goes through a pull request approved by another member.
