@@ -1,16 +1,27 @@
 // Azure resources for the Calling-home planner (group sdd-3b-g5).
 //
-// Deployed into the existing resource group rg-sdd-3b-g5 (we are not allowed to
-// create resource groups). Run once by hand for the initial setup; after that
-// only the pipeline changes anything. Commands are in the README.
+// The pipeline identity for the group subscription never arrived, so for now
+// everything runs in Sanad's Azure for Students subscription (rg-sdd-3b-g5 in
+// Poland Central), as the professor told us. Run once by hand for the initial
+// setup; after that only the pipeline changes anything. Commands are in the README.
+// The pipeline identity itself is in pipeline-identity.bicep.
 
 targetScope = 'resourceGroup'
 
 @description('Prefix for every resource name: sdd-<class>-g<N>.')
 param prefix string = 'sdd-3b-g5'
 
-@description('Region for everything. The group resource group is in westeurope.')
+@description('Region for everything. Must be one of the regions allowed on the subscription.')
 param location string = resourceGroup().location
+
+@description('Storage account for the UI: 3-24 lowercase letters and digits, unique in all of Azure.')
+param uiStorageName string = replace('${prefix}ui', '-', '')
+
+@description('SQL server name, unique in all of Azure. sdd-3b-g5-sql is already taken by the group server in the IE subscription.')
+param sqlServerName string = '${prefix}-sql-pl'
+
+@description('Use the free Azure SQL offer. True on Azure for Students; false on the IE group subscription, which only allows 10 databases in total.')
+param useFreeOffer bool = true
 
 @description('SQL server admin login. Used only for the one-off setup (creating the per-service users).')
 param sqlAdminLogin string = 'sqladmin-${prefix}'
@@ -72,12 +83,13 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
 
 // SQL server and one serverless database per service
 // One logical server, two databases: each service owns its own data and only
-// gets a user for its own database. Serverless General Purpose, 0.5-1 vCore,
-// auto-pause after 15 minutes and 2 GB max, as the professor's guide sets for
-// the group subscription (no free offer there).
+// gets a user for its own database. Serverless General Purpose, 0.5-1 vCore.
+// On the free offer Azure fixes auto-pause (60 min) and size (32 GB), so we must
+// not set them. Without it we use 15 minutes and 2 GB, as the guide sets for the
+// group subscription.
 
 resource sql 'Microsoft.Sql/servers@2023-08-01-preview' = {
-  name: '${prefix}-sql'
+  name: sqlServerName
   location: location
   properties: {
     administratorLogin: sqlAdminLogin
@@ -114,31 +126,47 @@ resource dbs 'Microsoft.Sql/servers/databases@2023-08-01-preview' = [
       family: 'Gen5'
       capacity: 1
     }
-    properties: {
-      minCapacity: json('0.5')
-      autoPauseDelay: 15
-      maxSizeBytes: 2147483648
-      requestedBackupStorageRedundancy: 'Local'
-      zoneRedundant: false
-    }
+    properties: useFreeOffer
+      ? {
+          minCapacity: json('0.5')
+          useFreeLimit: true
+          freeLimitExhaustionBehavior: 'AutoPause'
+          requestedBackupStorageRedundancy: 'Local'
+          zoneRedundant: false
+        }
+      : {
+          minCapacity: json('0.5')
+          autoPauseDelay: 15
+          maxSizeBytes: 2147483648
+          requestedBackupStorageRedundancy: 'Local'
+          zoneRedundant: false
+        }
   }
 ]
 
-// Static Web App for the UI
-// Free tier, one per group, named <prefix>-ui as the brief requires. Its
+// Storage static website for the UI
+// Static Web Apps aren't offered in any of our allowed regions, so the UI is a
+// static website on a storage account, as in the guide. The static website
+// itself is switched on with one az command after the deploy (README). Its
 // address is the only origin the services accept (CORS).
 
-resource ui 'Microsoft.Web/staticSites@2023-12-01' = {
-  name: '${prefix}-ui'
+resource ui 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: uiStorageName
   location: location
+  kind: 'StorageV2'
   sku: {
-    name: 'Free'
-    tier: 'Free'
+    name: 'Standard_LRS'
   }
-  properties: {}
+  properties: {
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+    allowBlobPublicAccess: false
+  }
 }
 
-var uiOrigin = 'https://${ui.properties.defaultHostname}'
+// The web endpoint ends with a slash; a browser's Origin header doesn't.
+var uiWebEndpoint = ui.properties.primaryEndpoints.web
+var uiOrigin = take(uiWebEndpoint, length(uiWebEndpoint) - 1)
 var sqlHost = sql.properties.fullyQualifiedDomainName
 
 // Container Apps: one per service
@@ -249,6 +277,7 @@ resource overlap 'Microsoft.App/containerApps@2024-03-01' = {
 output logAnalyticsWorkspace string = logs.name
 output containerAppsEnvironment string = env.name
 output sqlServerHost string = sql.properties.fullyQualifiedDomainName
+output uiStorage string = ui.name
 output uiUrl string = uiOrigin
 output contactsUrl string = 'https://${contacts.properties.configuration.ingress.fqdn}'
 output overlapUrl string = 'https://${overlap.properties.configuration.ingress.fqdn}'
