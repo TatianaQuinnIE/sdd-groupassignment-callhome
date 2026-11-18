@@ -14,4 +14,5 @@ def connect(settings: Settings):
         database=settings.db_name,
         login_timeout=10,
         timeout=30,
+        tds_version="7.4",  # returns TIME and DATETIME2 as Python objects
     )
