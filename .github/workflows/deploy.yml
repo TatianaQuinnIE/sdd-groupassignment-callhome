@@ -152,8 +152,8 @@ jobs:
         if: hashFiles('ui/index.html') == ''
         run: echo "::warning::ui/index.html not on main yet, UI not deployed"
 
-      # Passes only when the revision running this commit's image is ready and
-      # /health returns 200. A 503 "App port is not ready" during cold start is retried.
+      # Passes only when the app runs this commit's image and /health returns 200.
+      # A 503 "App port is not ready" during cold start is retried.
       - name: Health check (retries for about 3 minutes)
         run: |
           check() {
@@ -162,16 +162,16 @@ jobs:
             while [ "$SECONDS" -lt "$deadline" ]; do
               state=$(az containerapp show --name "$app" --resource-group "$RESOURCE_GROUP" --output json || echo '{}')
               latest=$(jq -r '.properties.latestRevisionName // ""' <<<"$state")
-              ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$state")
               running_image=$(jq -r '.properties.template.containers[0].image // ""' <<<"$state")
-              if [ "$running_image" = "$image" ] && [ "$latest" = "$ready" ]; then
+              # latestReadyRevisionName stays empty in our setup, so only the image is checked.
+              if [ "$running_image" = "$image" ]; then
                 code=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 40 "$url" || true)
                 if [ "$code" = "200" ]; then
                   echo "$app: /health 200 on revision $latest"
                   return 0
                 fi
               fi
-              echo "$app: not ready yet (revision ${latest:-?}, ready ${ready:-none}, /health ${code:-not tried}); retrying in 10 s"
+              echo "$app: not ready yet (revision ${latest:-?}, image ${running_image:-?}, /health ${code:-not tried}); retrying in 10 s"
               sleep 10
             done
             echo "::error::$app never returned 200 on $url within ${HEALTH_TIMEOUT_S}s"
