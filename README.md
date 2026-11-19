@@ -17,6 +17,52 @@ Scrum on Azure group assignment. MVP deadline: 24 Nov 2026, 23:59.
 If overlap-service or Nager.Date is down, contacts and the call log still work and the
 UI shows "Suggestions unavailable right now".
 
+## Architecture
+
+```mermaid
+flowchart LR
+    browser([Browser])
+
+    subgraph azure["Azure: rg-sdd-3b-g5 (Poland Central)"]
+        ui["UI<br/>storage static website<br/>sdd3bg5ui"]
+        subgraph apps["Container Apps environment"]
+            contacts["contacts-service<br/>FastAPI :8000"]
+            overlap["overlap-service<br/>FastAPI :8000"]
+        end
+        subgraph sql["SQL server sdd-3b-g5-sql-pl"]
+            contactsdb[("contacts database")]
+            overlapdb[("overlap database<br/>holiday_cache")]
+        end
+        logs["Log Analytics<br/>request logs"]
+    end
+
+    nager["Nager.Date API"]
+
+    subgraph github["GitHub"]
+        actions["GitHub Actions<br/>ci.yml + deploy.yml"]
+        ghcr["GHCR images<br/>tagged with commit SHA"]
+    end
+
+    browser --> ui
+    browser -->|"REST + CORS"| contacts
+    browser -->|"REST + CORS"| overlap
+    overlap -->|"httpx, timeout"| contacts
+    overlap -->|"public holidays"| nager
+    contacts --> contactsdb
+    overlap --> overlapdb
+    apps -. "stdout" .-> logs
+    actions -->|"push image"| ghcr
+    ghcr -->|"pull image"| apps
+    actions -->|"OIDC: update image"| apps
+    actions -->|"upload ui/ + config.js"| ui
+```
+
+The browser loads the UI from storage and calls both services directly; `config.js`
+(written by the pipeline) tells it their addresses. overlap-service reads contacts from
+contacts-service, so if contacts-service is down there are no suggestions, but if
+overlap-service is down the contacts page still works. Each service has its own database
+and its own database user.
+
 ## Repository layout
 
 | Folder | Contents |
@@ -105,6 +151,33 @@ anything. No password is ever written in the repository.
 
 Still to do: one database user per service (`contacts_app`, `overlap_app`), the federated
 credential for the pipeline identity, and the GitHub secrets.
+
+## Deployment pipeline
+
+`.github/workflows/deploy.yml` runs on every push to `main`:
+
+1. Runs the whole of `ci.yml` (lint, format, tests with the 70% gate, Bandit, pip-audit,
+   gitleaks, Docker build). If anything fails, nothing is deployed. On `main`, CI runs only
+   from here, so it does not run twice.
+2. Builds both images and pushes them to GHCR as
+   `ghcr.io/tatianaquinnie/<service>:<commit SHA>` (owner in lowercase, `provenance: false`).
+3. Signs in to Azure as the managed identity `sdd-3b-g5-github` with OIDC (no Azure
+   password stored in GitHub).
+4. For each Container App (contacts first): sets the database password secret, sets the
+   target port to 8000 and switches the image to the new SHA.
+5. Writes `ui/config.js` with both service addresses and uploads `ui/` to the `$web`
+   container of the storage account `UI_STORAGE` (static website).
+6. Calls `/health` on both services for up to 3 minutes and fails the run if the new
+   revision never returns 200.
+
+GitHub secrets it needs (Settings › Secrets and variables › Actions): `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `CONTACTS_DB_PASSWORD`, `OVERLAP_DB_PASSWORD`.
+Variables: `PREFIX`, `RESOURCE_GROUP` and `UI_STORAGE` (default `sdd-3b-g5`, `rg-sdd-3b-g5`
+and `sdd3bg5ui`).
+
+First deploy only: GHCR packages start private, so Azure cannot pull them. After the first
+run, open each package (`contacts-service`, `overlap-service`) in GitHub › Packages ›
+Package settings, change visibility to Public, and re-run the failed job.
 
 ## Rules
 

@@ -1,0 +1,186 @@
+name: Deploy
+
+# Every push to main: run the full CI (ci.yml) first, then deploy only if it passed.
+# The pipeline is the only thing that changes Azure after the initial setup.
+on:
+  push:
+    branches: [main]
+
+# One deploy at a time; a newer push waits instead of cancelling a half-done deploy.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PREFIX: ${{ vars.PREFIX || 'sdd-3b-g5' }}
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'rg-sdd-3b-g5' }}
+  # Storage account whose static website ($web container) serves the UI.
+  UI_STORAGE: ${{ vars.UI_STORAGE || 'sdd3bg5ui' }}
+  # Our FastAPI images listen on 8000; the Bicep placeholder used 80.
+  TARGET_PORT: "8000"
+  # Cold start + database resume can take about a minute; wait up to 3.
+  HEALTH_TIMEOUT_S: "180"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # No `environment:` here: it would change the OIDC subject and break the
+    # federated credential (repo:<owner>/<repo>:ref:refs/heads/main).
+    permissions:
+      contents: read
+      packages: write # push images to GHCR
+      id-token: write # OIDC sign-in to Azure, no stored Azure password
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check required secrets
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          CONTACTS_DB_PASSWORD: ${{ secrets.CONTACTS_DB_PASSWORD }}
+          OVERLAP_DB_PASSWORD: ${{ secrets.OVERLAP_DB_PASSWORD }}
+        run: |
+          missing=""
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID \
+                      CONTACTS_DB_PASSWORD OVERLAP_DB_PASSWORD; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub secrets:$missing"
+            exit 1
+          fi
+
+      # GHCR image names must be lowercase (TatianaQuinnIE -> tatianaquinnie).
+      - name: Image names
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "CONTACTS_IMAGE=ghcr.io/$owner/contacts-service:$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "OVERLAP_IMAGE=ghcr.io/$owner/overlap-service:$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      # provenance=false: otherwise Azure cannot pull the image even when it is public.
+      # The source label links each package to this repository on GitHub.
+      - name: Build and push images (tagged with the commit SHA)
+        run: |
+          for pair in "contacts-service $CONTACTS_IMAGE" "overlap-service $OVERLAP_IMAGE"; do
+            set -- $pair
+            docker buildx build "$1" \
+              --provenance=false \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --tag "$2" \
+              --push
+          done
+
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # contacts first: overlap-service calls it.
+      # Each app: DB password secret (GitHub is the source of truth), target port 8000,
+      # then the new image, which creates a new revision.
+      - name: Deploy the Container Apps
+        env:
+          CONTACTS_DB_PASSWORD: ${{ secrets.CONTACTS_DB_PASSWORD }}
+          OVERLAP_DB_PASSWORD: ${{ secrets.OVERLAP_DB_PASSWORD }}
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors
+          deploy() {
+            local app="$PREFIX-$1" image="$2" password="$3"
+            echo "::group::$app -> $image"
+            az containerapp secret set --name "$app" --resource-group "$RESOURCE_GROUP" \
+              --secrets "db-password=$password" --output none
+            az containerapp ingress update --name "$app" --resource-group "$RESOURCE_GROUP" \
+              --target-port "$TARGET_PORT" --output none
+            az containerapp update --name "$app" --resource-group "$RESOURCE_GROUP" \
+              --image "$image" --output none
+            echo "::endgroup::"
+          }
+          deploy contacts "$CONTACTS_IMAGE" "$CONTACTS_DB_PASSWORD"
+          deploy overlap "$OVERLAP_IMAGE" "$OVERLAP_DB_PASSWORD"
+
+          for service in contacts overlap; do
+            fqdn=$(az containerapp show --name "$PREFIX-$service" --resource-group "$RESOURCE_GROUP" \
+              --query properties.configuration.ingress.fqdn --output tsv)
+            echo "${service^^}_URL=https://$fqdn" >> "$GITHUB_ENV"
+          done
+
+      # The UI reads the service addresses from config.js, so they are never hard-coded.
+      - name: Write ui/config.js
+        run: |
+          cat > ui/config.js <<EOF
+          window.APP_CONFIG = {
+            contactsUrl: "$CONTACTS_URL",
+            overlapUrl: "$OVERLAP_URL",
+          };
+          EOF
+          cat ui/config.js
+
+      # Upload ui/ to the $web container of the storage static website.
+      # --auth-mode key: the identity is Contributor (it can read the account key) but
+      # has no blob data role. no-cache so a new config.js is picked up at once.
+      - name: Deploy the UI (storage static website)
+        if: hashFiles('ui/index.html') != ''
+        run: |
+          az storage blob upload-batch --account-name "$UI_STORAGE" --auth-mode key \
+            --destination '$web' --source ui --overwrite \
+            --content-cache-control "no-cache" --output none
+          url=$(az storage account show --name "$UI_STORAGE" --resource-group "$RESOURCE_GROUP" \
+            --query primaryEndpoints.web --output tsv)
+          echo "UI_URL=$url" >> "$GITHUB_ENV"
+          echo "UI deployed to $url"
+
+      - name: Warn if there is no UI yet
+        if: hashFiles('ui/index.html') == ''
+        run: echo "::warning::ui/index.html not on main yet, UI not deployed"
+
+      # Passes only when the app runs this commit's image and /health returns 200.
+      # A 503 "App port is not ready" during cold start is retried.
+      - name: Health check (retries for about 3 minutes)
+        run: |
+          check() {
+            local app="$PREFIX-$1" url="$2/health" image="$3"
+            local deadline=$((SECONDS + HEALTH_TIMEOUT_S)) code=""
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              state=$(az containerapp show --name "$app" --resource-group "$RESOURCE_GROUP" --output json || echo '{}')
+              latest=$(jq -r '.properties.latestRevisionName // ""' <<<"$state")
+              running_image=$(jq -r '.properties.template.containers[0].image // ""' <<<"$state")
+              # latestReadyRevisionName stays empty in our setup, so only the image is checked.
+              if [ "$running_image" = "$image" ]; then
+                code=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 40 "$url" || true)
+                if [ "$code" = "200" ]; then
+                  echo "$app: /health 200 on revision $latest"
+                  return 0
+                fi
+              fi
+              echo "$app: not ready yet (revision ${latest:-?}, image ${running_image:-?}, /health ${code:-not tried}); retrying in 10 s"
+              sleep 10
+            done
+            echo "::error::$app never returned 200 on $url within ${HEALTH_TIMEOUT_S}s"
+            az containerapp revision list --name "$app" --resource-group "$RESOURCE_GROUP" --output table || true
+            az containerapp logs show --name "$app" --resource-group "$RESOURCE_GROUP" --type system --tail 30 || true
+            echo "If the log says 'Authentication failed when pulling container image', make the GHCR package public and re-run this job."
+            return 1
+          }
+          status=0
+          check contacts "$CONTACTS_URL" "$CONTACTS_IMAGE" || status=1
+          check overlap "$OVERLAP_URL" "$OVERLAP_IMAGE" || status=1
+          exit $status
