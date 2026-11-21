@@ -12,7 +12,8 @@ Scrum on Azure group assignment. MVP deadline: 24 Nov 2026, 23:59.
 - **overlap-service** (Python FastAPI): fetches contacts from contacts-service, finds the
   best call windows over the next 7 days, ranks contacts by how overdue they are, and
   flags public holidays in the contact's country (Nager.Date, cached).
-- **UI**: plain HTML/JS on Azure Static Web Apps: a contacts page and a "This week" grid.
+- **UI**: plain HTML/JS served as an Azure Storage static website: a contacts page and a
+  "This week" grid.
 
 If overlap-service or Nager.Date is down, contacts and the call log still work and the
 UI shows "Suggestions unavailable right now".
@@ -92,22 +93,40 @@ _To be added by Alicia._
 
 ## Live URL and Azure setup
 
+### Where it runs, and why
+
+The pipeline identity we were meant to get in the IE group subscription
+(`sdd-3b-g5-github`) was never created, and we can't create it ourselves there (no role
+assignments allowed). The professor told us to run on an individual Azure for Students
+subscription for now, so everything runs in Sanad's subscription, resource group
+`rg-sdd-3b-g5` in **Poland Central**. If the group identity arrives later we move back: the
+Bicep files work in both places.
+
+Two things differ from the group subscription:
+
+- Static Web Apps aren't offered in any region our subscription allows, so the UI is a
+  **Storage static website** instead.
+- The databases use the **free Azure SQL offer** (auto-pause 60 min and 32 GB, fixed by Azure).
+
+The first setup we made in the IE subscription (West Europe) is still there but unused.
+
 ### Live URLs
 
 | Part | URL |
 | --- | --- |
-| UI (Static Web App) | https://proud-smoke-020ed6603.5.azurestaticapps.net |
-| contacts-service | https://sdd-3b-g5-contacts.salmoncoast-e659666b.westeurope.azurecontainerapps.io |
-| overlap-service | https://sdd-3b-g5-overlap.salmoncoast-e659666b.westeurope.azurecontainerapps.io |
+| UI (Storage static website) | https://sdd3bg5ui.z36.web.core.windows.net |
+| contacts-service | https://sdd-3b-g5-contacts.delightfulrock-fea08312.polandcentral.azurecontainerapps.io |
+| overlap-service | https://sdd-3b-g5-overlap.delightfulrock-fea08312.polandcentral.azurecontainerapps.io |
 
-Until the first pipeline deploy, both services run a placeholder image and the UI shows
-the default Static Web Apps page. After a quiet period the first request can take up to a
-minute, because the container starts from zero and the database resumes from auto-pause.
+Both services run the images the pipeline builds from `main`. The UI address returns 404
+until `ui/index.html` is on `main`. After a quiet period the first request can take up to a
+minute (503 "App port is not ready"), because the container starts from zero and the
+database resumes from auto-pause.
 
 ### What runs in Azure
 
-Everything is in the group resource group `rg-sdd-3b-g5` (West Europe), in the IE
-subscription, and is defined in [`infra/main.bicep`](infra/main.bicep).
+Defined in [`infra/main.bicep`](infra/main.bicep) and
+[`infra/pipeline-identity.bicep`](infra/pipeline-identity.bicep).
 
 | Resource | Name | Settings |
 | --- | --- | --- |
@@ -115,42 +134,81 @@ subscription, and is defined in [`infra/main.bicep`](infra/main.bicep).
 | Container Apps environment | `sdd-3b-g5-env` | Consumption plan, logs to the workspace above |
 | Container App | `sdd-3b-g5-contacts` | 0-1 replicas, 0.25 vCPU, 0.5 GiB |
 | Container App | `sdd-3b-g5-overlap` | 0-1 replicas, 0.25 vCPU, 0.5 GiB |
-| SQL server | `sdd-3b-g5-sql` | TLS 1.2+, firewall: Azure services only |
-| SQL database | `sdd-3b-g5-contacts-db` | Serverless Gen5 0.5-1 vCore, auto-pause 15 min, 2 GB |
-| SQL database | `sdd-3b-g5-overlap-db` | Serverless Gen5 0.5-1 vCore, auto-pause 15 min, 2 GB |
-| Static Web App | `sdd-3b-g5-ui` | Free tier |
+| SQL server | `sdd-3b-g5-sql-pl` | TLS 1.2+, firewall: Azure services only |
+| SQL database | `sdd-3b-g5-contacts-db` | Serverless Gen5 0.5-1 vCore, free offer, user `contacts_app` |
+| SQL database | `sdd-3b-g5-overlap-db` | Serverless Gen5 0.5-1 vCore, free offer, user `overlap_app` |
+| Storage account | `sdd3bg5ui` | Static website (`$web`), serves the UI |
+| Managed identity | `sdd-3b-g5-github` | Contributor on `rg-sdd-3b-g5` only; trusts GitHub runs on `main` |
 
 Configuration reaches the services only through environment variables. Database
 passwords are Container Apps secrets. CORS allows only the UI's address and is handled in
-the service code, not in the Container Apps ingress.
+the service code, not in the Container Apps ingress. Each service's database user can only
+reach its own database (`db_ddladmin`, `db_datareader`, `db_datawriter`).
 
 ### Reproduce the setup
 
 The initial setup is run once by one member. After that, only the pipeline changes
-anything. No password is ever written in the repository.
+anything. No password is ever written in the repository. Commands are Bash (in zsh,
+`repo:$X:ref` loses characters).
 
-1. Accept the Microsoft invitation from IE Instituto de Empresa, S.L., then sign in to
-   that directory:
-
-   ```bash
-   az login --tenant 5ca2bc70-353c-4d1f-b7d7-7f2b2259df68
-   ```
-
-2. Choose three strong passwords (SQL admin, `contacts_app` user, `overlap_app` user) and
-   keep them in a password manager. They must not contain any part of the login name.
-
-3. Preview, then deploy:
+1. Select the subscription and check its allowed regions:
 
    ```bash
-   az deployment group what-if --resource-group rg-sdd-3b-g5 --template-file infra/main.bicep
-   az deployment group create --resource-group rg-sdd-3b-g5 --template-file infra/main.bicep
+   az account set --subscription "Azure for Students"
+   az policy assignment list --query "[].parameters.listOfAllowedLocations.value" -o tsv
    ```
 
-   `az` asks for the three passwords; they are `@secure()` parameters, so they are not
-   stored in the deployment history. The command prints the live URLs.
+2. Register the providers once, then create the resource group:
 
-Still to do: one database user per service (`contacts_app`, `overlap_app`), the federated
-credential for the pipeline identity, and the GitHub secrets.
+   ```bash
+   for p in Microsoft.App Microsoft.OperationalInsights Microsoft.Sql Microsoft.Storage Microsoft.ManagedIdentity; do
+     az provider register -n $p
+   done
+   az group create -n rg-sdd-3b-g5 -l polandcentral
+   ```
+
+3. Choose three strong passwords (SQL admin, `contacts_app`, `overlap_app`) and keep them in
+   a password manager. They must not contain any part of the login name. Then deploy;
+   `az` asks for them, and as `@secure()` parameters they aren't stored in the deployment
+   history:
+
+   ```bash
+   az deployment group create -g rg-sdd-3b-g5 -f infra/main.bicep --parameters targetPort=80
+   ```
+
+   `targetPort=80` is only for this first run, because the placeholder image listens on
+   port 80 (our images use 8000, the default). Don't re-run this after the pipeline has
+   deployed: it would put the placeholder image back on both apps.
+
+4. Switch on the static website (Bicep can't do this part):
+
+   ```bash
+   az storage blob service-properties update --account-name sdd3bg5ui \
+     --account-key "$(az storage account keys list -g rg-sdd-3b-g5 -n sdd3bg5ui --query '[0].value' -o tsv)" \
+     --static-website --index-document index.html --404-document index.html
+   ```
+
+5. Create one contained user per database. Open the firewall to your IP first and delete
+   the rule afterwards. In each database (`sqlcmd -S tcp:sdd-3b-g5-sql-pl.database.windows.net
+   -d sdd-3b-g5-<service>-db -U sqladmin-sdd-3b-g5 -N`):
+
+   ```sql
+   CREATE USER [<service>_app] WITH PASSWORD = '<that service''s password>';
+   ALTER ROLE db_ddladmin ADD MEMBER [<service>_app];
+   ALTER ROLE db_datareader ADD MEMBER [<service>_app];
+   ALTER ROLE db_datawriter ADD MEMBER [<service>_app];
+   ```
+
+6. Create the pipeline identity, its Contributor role and the two federated credentials
+   (by name and by numeric IDs, since GitHub can send either):
+
+   ```bash
+   az deployment group create -g rg-sdd-3b-g5 -f infra/pipeline-identity.bicep
+   ```
+
+7. The repo owner adds the GitHub secrets and variables listed under
+   [Deployment pipeline](#deployment-pipeline). `AZURE_CLIENT_ID` is the `clientId` output
+   of step 6; the database passwords are typed in by whoever holds them, never sent in chat.
 
 ## Deployment pipeline
 
