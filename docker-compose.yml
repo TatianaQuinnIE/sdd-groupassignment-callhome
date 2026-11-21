@@ -30,3 +30,19 @@ services:
       - ./db:/db:ro
     entrypoint: /opt/mssql-tools18/bin/sqlcmd -C -S db -U sa -b -i /db/init.sql
     restart: "no"
+
+  contacts-service:
+    build: ./contacts-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: db
+      DB_PORT: "1433"
+      DB_NAME: contacts
+      DB_USER: contacts_user
+      DB_PASSWORD: ${CONTACTS_DB_PASSWORD:?set CONTACTS_DB_PASSWORD in .env}
+      CORS_ORIGINS: http://localhost:8080
+      RUN_MIGRATIONS: "true"
+    ports:
+      - "8001:8000"
