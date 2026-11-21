@@ -65,3 +65,11 @@ services:
       CONTACTS_TIMEOUT_S: "3"
     ports:
       - "8002:8000"
+
+  # Static UI: stock nginx serving ui/ (no Dockerfile, not a service container).
+  ui:
+    image: nginx:1.27.3-alpine
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
