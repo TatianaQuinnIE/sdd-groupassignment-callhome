@@ -46,3 +46,22 @@ services:
       RUN_MIGRATIONS: "true"
     ports:
       - "8001:8000"
+
+  overlap-service:
+    build: ./overlap-service
+    # Only waits for its own database: it must keep working if contacts-service is down.
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: db
+      DB_PORT: "1433"
+      DB_NAME: overlap
+      DB_USER: overlap_user
+      DB_PASSWORD: ${OVERLAP_DB_PASSWORD:?set OVERLAP_DB_PASSWORD in .env}
+      CORS_ORIGINS: http://localhost:8080
+      RUN_MIGRATIONS: "true"
+      CONTACTS_SERVICE_URL: http://contacts-service:8000
+      CONTACTS_TIMEOUT_S: "3"
+    ports:
+      - "8002:8000"
