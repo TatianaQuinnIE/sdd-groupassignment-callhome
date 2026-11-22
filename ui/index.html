@@ -14,6 +14,7 @@
   <script src="contacts.js"></script>
   <script src="calls.js"></script>
   <script src="suggestions.js"></script>
+  <script src="myweek.js"></script>
 </head>
 <body>
   <header>
@@ -59,14 +60,48 @@
       </div>
     </section>
 
+    <section class="card" aria-labelledby="myweek-title">
+      <div class="card-intro">
+        <img class="sticker" src="img/octopus.png" alt="A busy octopus writing, reading and drinking coffee at once">
+        <div>
+          <h2 id="myweek-title">My week</h2>
+          <p>Busy? Tell us when. Call suggestions skip your sleep and the busy times below.</p>
+        </div>
+      </div>
+
+      <div id="myweek-unavailable" class="unavailable" hidden>
+        <p><strong>Your week can't be loaded right now.</strong> Your people and calls still work.</p>
+        <p id="myweek-unavailable-text" class="muted"></p>
+        <button id="myweek-retry" type="button">Try again</button>
+      </div>
+
+      <div id="myweek-content" hidden>
+        <form id="settings-form" class="inline-form">
+          <label>My time zone <input name="time_zone" required list="time-zones"></label>
+          <label>Asleep from <input name="sleep_start" type="time" required></label>
+          <label>Awake from <input name="sleep_end" type="time" required></label>
+          <button type="submit">Save</button>
+        </form>
+
+        <h3>Busy every week</h3>
+        <ul id="busy-list" class="busy-list"></ul>
+
+        <form id="busy-form" class="inline-form">
+          <label>Day <select name="weekday"></select></label>
+          <label>From <input name="start" type="time" value="09:00" required></label>
+          <label>To <input name="end" type="time" value="11:00" required></label>
+          <label>What <input name="label" maxlength="100" placeholder="Class, work… (optional)"></label>
+          <button type="submit">Add busy time</button>
+        </form>
+        <p id="myweek-error" class="form-error" role="alert" hidden></p>
+      </div>
+    </section>
+
     <section class="card" aria-labelledby="people-title">
       <h2 id="people-title">Your people</h2>
       <p id="contacts-loading" class="muted">Loading…</p>
 
-      <div id="contacts-empty" class="empty" hidden>
-        <img class="sticker" src="img/octopus.png" alt="A busy octopus writing, reading and drinking coffee at once">
-        <p>No one here yet. Add the people you want to call home to.</p>
-      </div>
+      <p id="contacts-empty" class="muted" hidden>No one here yet. Add the people you want to call home to below.</p>
 
       <div class="table-wrap">
         <table id="contacts-table" hidden>
@@ -136,6 +171,7 @@
     checkAll();
     setUpContacts();
     setUpSuggestions();
+    setUpMyWeek();
   </script>
 </body>
 </html>
