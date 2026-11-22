@@ -3,14 +3,21 @@ and exposes a health endpoint."""
 
 import logging
 import sys
+from collections.abc import Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import db, migrations
 from app.config import Settings
+from app.contacts_client import ContactsClient, ContactsUnavailable
+from app.demo_user import DEMO_USER
 from app.logging_middleware import RequestLogMiddleware
+from app.routes import router as suggestions_router
+from app.windows import Person
 
 # Root login
 logging.basicConfig(
@@ -19,7 +26,12 @@ logging.basicConfig(
 logger = logging.getLogger("overlap")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    contacts: ContactsClient | None = None,
+    clock: Callable[[], datetime] | None = None,
+    user: Person | None = None,
+) -> FastAPI:
     settings = settings or Settings()
 
     @asynccontextmanager
@@ -31,7 +43,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             logger.info("skipping migrations (disabled or database not configured)")
         yield
 
-    app = FastAPI(title="overlap-service", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="overlap-service", version="0.2.0", lifespan=lifespan)
+    app.state.contacts = contacts or ContactsClient(
+        settings.contacts_service_url, settings.contacts_timeout_s
+    )
+    app.state.clock = clock or (lambda: datetime.now(UTC))
+    app.state.user = user or DEMO_USER
     app.add_middleware(RequestLogMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -40,12 +57,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Content-Type"],
     )
 
+    @app.exception_handler(ContactsUnavailable)
+    async def contacts_unavailable(request: Request, exc: ContactsUnavailable):
+        # A clear message instead of a stack trace when contacts-service is down or slow.
+        logger.warning("contacts-service unavailable: %s", exc)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "contacts-service is unavailable, suggestions are not available"},
+        )
+
     @app.get("/health")
     def health():
         # Deliberately independent of contacts-service and Nager.Date, so a
         # dependency outage never makes this service look dead to the pipeline.
         return {"status": "ok", "service": "overlap-service"}
 
+    app.include_router(suggestions_router)
     return app
 
 
