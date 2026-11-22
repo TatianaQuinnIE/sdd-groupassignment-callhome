@@ -1,26 +1,80 @@
-body {
-  font-family: system-ui, sans-serif;
-  max-width: 60rem;
-  margin: 0 auto;
-  padding: 1rem;
-  color: #1f2328;
-  background: #ffffff;
+/* Colours from the "Have you called home lately?" poster. */
+:root {
+  --blue: #1736a6;
+  --blue-dark: #102a85;
+  --cream: #f3e9cf;
+  --coral: #f27c6b;
+  --ink: #1f2328;
+  --muted: #b9c3e8;
 }
 
-h1 { margin-bottom: 0.25rem; }
+body {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--cream);
+  background: var(--blue);
+}
 
-.status { font-size: 0.9rem; color: #59636e; }
-.ok { color: #1a7f37; }
-.down { color: #b42318; }
+main, header { max-width: 60rem; margin: 0 auto; padding: 0 1rem; }
+
+/* Poster-style header: big condensed headline left, handset drawing right. */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 2rem;
+}
+.hero h1 {
+  font-family: "Archivo", "Arial Narrow", sans-serif;
+  font-stretch: 75%;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: clamp(2.4rem, 7vw, 4.5rem);
+  line-height: 0.95;
+  margin: 0 0 0.75rem;
+}
+.hero h1 .accent { color: var(--coral); }
+.tagline { margin: 0; font-size: 1.1rem; }
+/* The illustrations are shown exactly as they are, on a light card. */
+.sticker {
+  background: #f6f6f6;
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.hero .sticker { width: min(32%, 15rem); flex-shrink: 0; transform: rotate(4deg); }
+
+@media (max-width: 40rem) {
+  .hero { flex-direction: column; align-items: stretch; }
+  .hero h1 { font-size: 2.6rem; }
+  .hero .sticker { width: 45%; align-self: center; }
+}
+
+.status { font-size: 0.9rem; color: var(--muted); margin: 1.5rem 0 0; }
+.ok { color: #9be3b0; }
+.down { color: var(--coral); }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  background: var(--cream);
+  color: var(--blue-dark);
+}
+button:hover { background: #ffffff; }
 
 .banner {
-  background: #fdecea;
-  border: 1px solid #f5c2bd;
-  color: #8a1c13;
+  background: var(--coral);
+  color: var(--ink);
   padding: 0.75rem 1rem;
-  border-radius: 6px;
+  border-radius: 8px;
   margin: 1rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
 }
-.banner button { margin-left: 1rem; }
 
 [hidden] { display: none !important; }

@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Calling Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&family=Inter:wght@400;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <!-- Service URLs: localhost in compose, Azure URLs written by the pipeline on deploy. -->
   <script src="config.js"></script>
@@ -11,7 +14,13 @@
 </head>
 <body>
   <header>
-    <h1>Calling Home</h1>
+    <div class="hero">
+      <div>
+        <h1>Have you called <span class="accent">home</span> lately?</h1>
+        <p class="tagline">A reminder for anyone living far away.</p>
+      </div>
+      <img class="sticker" src="img/phone.png" alt="A phone ringing">
+    </div>
     <p class="status">
       Contacts: <span id="status-contacts">checking…</span> ·
       Suggestions: <span id="status-overlap">checking…</span> ·
