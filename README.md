@@ -85,11 +85,66 @@ and its own database user.
 
 ## Run locally
 
-_To be added by Alicia (docker compose up)._
+You need Docker Desktop. On Apple Silicon, turn on "Use Rosetta for x86_64/amd64
+emulation" in Docker Desktop's settings, because SQL Server only ships an amd64 image.
+
+1. Create your `.env` from the example and choose your own local passwords
+   (8+ characters with 3 of: uppercase, lowercase, number, symbol):
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Start everything:
+
+   ```bash
+   docker compose up --build
+   ```
+
+3. Open the UI at http://localhost:8080. Both services should show **OK**.
+
+| Container | Local address | What it does |
+| --- | --- | --- |
+| `db` | `localhost:14331` | One SQL Server holding both databases |
+| `db-init` | n/a | Runs `db/init.sql` (both databases, one login per service), then exits |
+| `contacts-service` | http://localhost:8001 | Contacts and call log, logs in as `contacts_user` |
+| `overlap-service` | http://localhost:8002 | Call suggestions, logs in as `overlap_user`, calls contacts-service through `CONTACTS_SERVICE_URL` |
+| `ui` | http://localhost:8080 | Stock nginx serving `ui/` |
+
+Each service applies its migrations on startup. Both have their API docs at `/docs`
+(e.g. http://localhost:8001/docs).
+
+**Run a single service** (compose also starts `db` and `db-init`, which it needs):
+
+```bash
+docker compose up --build contacts-service
+```
+
+**See partial failure**: `docker compose stop contacts-service`, then click
+**Check again** in the UI. contacts-service shows "not responding" and overlap-service
+keeps working.
+
+**Stop**: `docker compose down`. The database has no volume, so this also deletes the
+local data, and the next `up` starts from empty databases.
 
 ## Run the tests
 
-_To be added by Alicia._
+The tests use an in-memory fake instead of SQL Server, so they need Python 3.12 but no
+Docker. Run them per service, the same way CI does (shown for contacts-service; replace
+the folder name for overlap-service):
+
+```bash
+cd contacts-service
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+
+.venv/bin/python -m pytest --cov --cov-report=term-missing --cov-fail-under=70
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+```
+
+`pytest` fails if coverage of `app/` drops below 70%, and CI runs the same three
+commands on every pull request.
 
 ## Live URL and Azure setup
 
