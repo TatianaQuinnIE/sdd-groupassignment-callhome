@@ -8,6 +8,51 @@ One record per member (context, decision, alternatives, consequences).
 4. Deployment and pipeline (Tatiana)
 5. Storage and monitoring (Sanad)
 
+## 3. Frontend (Alicia)
+
+**Context.** The brief asks for a static UI that calls both services from the browser,
+with CORS restricted to the UI's origin and the service URLs as configuration, not code.
+Static Web Apps is not available in our subscription's regions, so the UI is files in a
+storage static website. Both services scale to zero and the databases auto-pause, so the
+first request after a quiet period can fail or take about a minute. With one service down,
+the other part of the product must keep working and the user must see a clear message.
+
+**Decision.**
+
+- Plain HTML, CSS and JavaScript in `ui/`, no framework and no build step. One file per
+  part of the page: `api.js` (calls to the services), `contacts.js` (people, full CRUD),
+  `calls.js` (call log), `suggestions.js` ("This week").
+- Every call goes through one helper, `callService()`. It aborts after 10 seconds and turns
+  every failure (timeout, service down, 503, validation error) into one readable sentence.
+- The service URLs come from `config.js`. Locally it points to `localhost:8001/8002`; on
+  deploy the pipeline overwrites it with the Azure URLs.
+- Each part fails on its own: if overlap-service is down, "This week" shows "Suggestions
+  unavailable right now" with a Try again button, and people and calls keep working.
+- The services send times in UTC; the browser converts them with `Intl` (the contact's
+  local time, and call windows in the user's time zone from `/suggestions`).
+- Data from the API is always inserted with `textContent`, never as HTML.
+- Locally, compose serves `ui/` with a stock `nginx` image (no Dockerfile, not a service
+  container).
+
+**Alternatives considered.**
+
+- *React or Vue built to static files:* nicer components, but it adds a build step to the
+  pipeline, many dependencies, and more code to explain for three small sections.
+- *Server-rendered pages from a service:* ruled out by the brief (static UI only).
+- *Hard-coded service URLs:* simpler, but each environment would need a code change.
+- *One global error page:* simpler, but one service failing would hide the part that
+  still works, which is what the partial-failure requirement asks us to avoid.
+
+**Consequences.**
+
+- Deploying the UI is just uploading `ui/`; there is nothing to build or install.
+- No automated UI tests: each part was tested by hand in Chrome against the compose stack,
+  including with overlap-service stopped. The services' logic is covered by their tests.
+- Call windows are shown in the demo user's time zone (`Europe/Madrid`, set in
+  overlap-service), not the browser's. Supporting real users would need a time zone setting.
+- The headline fonts load from Google Fonts. If they don't load, the page falls back to
+  system fonts and still works.
+
 ## 4. Deployment and pipeline (Tatiana)
 
 **Context.** After the initial setup, only the pipeline may change Azure. Every merge to
