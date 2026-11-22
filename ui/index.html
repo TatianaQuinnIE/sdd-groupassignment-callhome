@@ -4,55 +4,60 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Calling Home</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
-    li { margin: 0.5rem 0; }
-    .ok { color: #1a7f37; }
-    .down { color: #b42318; }
-  </style>
+  <link rel="stylesheet" href="style.css">
   <!-- Service URLs: localhost in compose, Azure URLs written by the pipeline on deploy. -->
   <script src="config.js"></script>
+  <script src="api.js"></script>
 </head>
 <body>
-  <h1>Calling Home</h1>
-  <h2>Service status</h2>
-  <ul>
-    <li>contacts-service: <span id="contacts">checking…</span></li>
-    <li>overlap-service: <span id="overlap">checking…</span></li>
-  </ul>
-  <button id="recheck">Check again</button>
+  <header>
+    <h1>Calling Home</h1>
+    <p class="status">
+      Contacts: <span id="status-contacts">checking…</span> ·
+      Suggestions: <span id="status-overlap">checking…</span> ·
+      <button id="recheck" type="button">Check again</button>
+    </p>
+  </header>
+
+  <!-- Shown when something fails, so the page never just goes blank. -->
+  <div id="banner" class="banner" role="alert" hidden>
+    <span id="banner-text"></span>
+    <button id="banner-close" type="button">Dismiss</button>
+  </div>
 
   <script>
-    const TIMEOUT_MS = 10000; // never wait forever for a service
+    function showError(message) {
+      document.getElementById("banner-text").textContent = message;
+      document.getElementById("banner").hidden = false;
+    }
 
-    async function checkHealth(baseUrl, elementId) {
-      const el = document.getElementById(elementId);
+    function hideError() {
+      document.getElementById("banner").hidden = true;
+    }
+
+    async function checkHealth(service) {
+      const el = document.getElementById("status-" + service);
       el.textContent = "checking…";
       el.className = "";
       try {
-        const response = await fetch(baseUrl + "/health", {
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-        if (response.ok) {
-          el.textContent = "OK";
-          el.className = "ok";
-        } else {
-          el.textContent = "error (HTTP " + response.status + "), try again in a minute";
-          el.className = "down";
-        }
+        await callService(service, "/health");
+        el.textContent = "OK";
+        el.className = "ok";
       } catch (error) {
-        // Timeout, network error or CORS refusal: the service is down or still starting.
-        el.textContent = "not responding, it may be starting up, try again in a minute";
+        el.textContent = "not responding";
         el.className = "down";
+        showError(error.message);
       }
     }
 
     function checkAll() {
-      checkHealth(window.APP_CONFIG.contactsUrl, "contacts");
-      checkHealth(window.APP_CONFIG.overlapUrl, "overlap");
+      hideError();
+      checkHealth("contacts");
+      checkHealth("overlap");
     }
 
     document.getElementById("recheck").addEventListener("click", checkAll);
+    document.getElementById("banner-close").addEventListener("click", hideError);
     checkAll();
   </script>
 </body>

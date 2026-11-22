@@ -1,0 +1,26 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1rem;
+  color: #1f2328;
+  background: #ffffff;
+}
+
+h1 { margin-bottom: 0.25rem; }
+
+.status { font-size: 0.9rem; color: #59636e; }
+.ok { color: #1a7f37; }
+.down { color: #b42318; }
+
+.banner {
+  background: #fdecea;
+  border: 1px solid #f5c2bd;
+  color: #8a1c13;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+.banner button { margin-left: 1rem; }
+
+[hidden] { display: none !important; }
