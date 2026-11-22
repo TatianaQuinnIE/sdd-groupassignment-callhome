@@ -43,7 +43,9 @@ async function callService(service, path, options = {}) {
     throw new Error("Please check the form. " + problems.join("; "));
   }
   if (data && typeof data.detail === "string") {
-    throw new Error(name + ": " + data.detail);
+    // 4xx: a problem with what the user sent (e.g. an overlap), the message says it all.
+    // 5xx: say which service is having trouble.
+    throw new Error(response.status < 500 ? data.detail : name + ": " + data.detail);
   }
   throw new Error(name + " returned an error (HTTP " + response.status + "). Try again in a minute.");
 }

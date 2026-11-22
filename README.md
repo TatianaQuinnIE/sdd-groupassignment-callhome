@@ -11,9 +11,11 @@ Scrum on Azure group assignment. MVP deadline: 24 Nov 2026, 23:59.
   sleep hours, preferred call length and how often to call, plus a log of calls made.
 - **overlap-service** (Python FastAPI): fetches contacts from contacts-service, finds the
   best call windows over the next 7 days, ranks contacts by how overdue they are, and
-  flags public holidays in the contact's country (Nager.Date, cached).
-- **UI**: plain HTML/JS served as an Azure Storage static website: a contacts page and a
-  "This week" grid.
+  flags public holidays in the contact's country (Nager.Date, cached). It also stores the
+  user's own week (time zone, sleep hours, weekly busy times; `/me`), which the windows
+  avoid. Overlapping busy times are refused.
+- **UI**: plain HTML/JS served as an Azure Storage static website: a "This week" grid,
+  "My week" to edit your own busy times, and a contacts page with the call log.
 
 If overlap-service or Nager.Date is down, contacts and the call log still work and the
 UI shows "Suggestions unavailable right now".
