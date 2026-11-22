@@ -17,6 +17,8 @@ from app.contacts_client import ContactsClient, ContactsUnavailable
 from app.demo_user import DEMO_USER
 from app.logging_middleware import RequestLogMiddleware
 from app.routes import router as suggestions_router
+from app.routes_me import router as my_week_router
+from app.schedule import DatabaseUnavailable, InMemoryScheduleRepository, SqlScheduleRepository
 from app.windows import Person
 
 # Root login
@@ -48,12 +50,17 @@ def create_app(
         settings.contacts_service_url, settings.contacts_timeout_s
     )
     app.state.clock = clock or (lambda: datetime.now(UTC))
-    app.state.user = user or DEMO_USER
+    # "My week": saved in the database (migration 002). Tests pass a `user` instead, and
+    # without a database the service falls back to the demo user in memory.
+    if user is None and settings.db_configured:
+        app.state.schedule = SqlScheduleRepository(lambda: db.connect(settings))
+    else:
+        app.state.schedule = InMemoryScheduleRepository(user or DEMO_USER)
     app.add_middleware(RequestLogMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Content-Type"],
     )
 
@@ -66,6 +73,14 @@ def create_app(
             content={"detail": "contacts-service is unavailable, suggestions are not available"},
         )
 
+    @app.exception_handler(DatabaseUnavailable)
+    async def database_unavailable(request: Request, exc: DatabaseUnavailable):
+        # A clear message instead of a stack trace when the database is down or waking up.
+        logger.warning("database unavailable: %s", exc)
+        return JSONResponse(
+            status_code=503, content={"detail": "Database unavailable, please try again shortly"}
+        )
+
     @app.get("/health")
     def health():
         # Deliberately independent of contacts-service and Nager.Date, so a
@@ -73,6 +88,7 @@ def create_app(
         return {"status": "ok", "service": "overlap-service"}
 
     app.include_router(suggestions_router)
+    app.include_router(my_week_router)
     return app
 
 
