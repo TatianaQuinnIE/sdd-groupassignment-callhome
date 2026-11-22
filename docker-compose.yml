@@ -1,5 +1,6 @@
 services:
-  contacts-db:
+  # One SQL Server for local runs, holding one database per service.
+  db:
     image: mcr.microsoft.com/mssql/server:2022-CU16-ubuntu-22.04
     platform: linux/amd64
     environment:
@@ -7,3 +8,68 @@ services:
       MSSQL_SA_PASSWORD: ${DB_SA_PASSWORD:?set DB_SA_PASSWORD in .env}
     ports:
       - "14331:1433"
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -b
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Runs db/init.sql once the server is up, then exits.
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-CU16-ubuntu-22.04
+    platform: linux/amd64
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SQLCMDPASSWORD: ${DB_SA_PASSWORD}
+      CONTACTS_DB_PASSWORD: ${CONTACTS_DB_PASSWORD:?set CONTACTS_DB_PASSWORD in .env}
+      OVERLAP_DB_PASSWORD: ${OVERLAP_DB_PASSWORD:?set OVERLAP_DB_PASSWORD in .env}
+    volumes:
+      - ./db:/db:ro
+    entrypoint: /opt/mssql-tools18/bin/sqlcmd -C -S db -U sa -b -i /db/init.sql
+    restart: "no"
+
+  contacts-service:
+    build: ./contacts-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: db
+      DB_PORT: "1433"
+      DB_NAME: contacts
+      DB_USER: contacts_user
+      DB_PASSWORD: ${CONTACTS_DB_PASSWORD:?set CONTACTS_DB_PASSWORD in .env}
+      CORS_ORIGINS: http://localhost:8080
+      RUN_MIGRATIONS: "true"
+    ports:
+      - "8001:8000"
+
+  overlap-service:
+    build: ./overlap-service
+    # Only waits for its own database: it must keep working if contacts-service is down.
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: db
+      DB_PORT: "1433"
+      DB_NAME: overlap
+      DB_USER: overlap_user
+      DB_PASSWORD: ${OVERLAP_DB_PASSWORD:?set OVERLAP_DB_PASSWORD in .env}
+      CORS_ORIGINS: http://localhost:8080
+      RUN_MIGRATIONS: "true"
+      CONTACTS_SERVICE_URL: http://contacts-service:8000
+      CONTACTS_TIMEOUT_S: "3"
+    ports:
+      - "8002:8000"
+
+  # Static UI: stock nginx serving ui/ (no Dockerfile, not a service container).
+  ui:
+    image: nginx:1.27.3-alpine
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
