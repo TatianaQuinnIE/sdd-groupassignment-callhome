@@ -4,56 +4,138 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Calling Home</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
-    li { margin: 0.5rem 0; }
-    .ok { color: #1a7f37; }
-    .down { color: #b42318; }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&family=Inter:wght@400;600&display=swap">
+  <link rel="stylesheet" href="style.css">
   <!-- Service URLs: localhost in compose, Azure URLs written by the pipeline on deploy. -->
   <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="contacts.js"></script>
+  <script src="calls.js"></script>
+  <script src="suggestions.js"></script>
 </head>
 <body>
-  <h1>Calling Home</h1>
-  <h2>Service status</h2>
-  <ul>
-    <li>contacts-service: <span id="contacts">checking…</span></li>
-    <li>overlap-service: <span id="overlap">checking…</span></li>
-  </ul>
-  <button id="recheck">Check again</button>
+  <header>
+    <div class="hero">
+      <div>
+        <h1>Have you called <span class="accent">home</span> lately?</h1>
+        <p class="tagline">A reminder for anyone living far away.</p>
+      </div>
+      <img class="sticker" src="img/phone.png" alt="A phone ringing">
+    </div>
+    <p class="status">
+      Contacts: <span id="status-contacts">checking…</span> ·
+      Suggestions: <span id="status-overlap">checking…</span> ·
+      <button id="recheck" type="button">Check again</button>
+    </p>
+  </header>
+
+  <!-- Shown when something fails, so the page never just goes blank. -->
+  <div id="banner" class="banner" role="alert" hidden>
+    <span id="banner-text"></span>
+    <button id="banner-close" type="button">Dismiss</button>
+  </div>
+
+  <main>
+    <section class="card" aria-labelledby="week-title">
+      <h2 id="week-title">This week</h2>
+
+      <div id="week-unavailable" class="unavailable" hidden>
+        <p><strong>Suggestions unavailable right now.</strong> Your people and calls still work.</p>
+        <p id="week-error" class="muted"></p>
+        <button id="week-retry" type="button">Try again</button>
+      </div>
+
+      <div id="week-content" hidden>
+        <div id="spotlight" class="spotlight"></div>
+        <div class="table-wrap">
+          <table class="week">
+            <thead><tr id="week-head"></tr></thead>
+            <tbody id="week-body"></tbody>
+          </table>
+        </div>
+        <p id="week-zone" class="muted"></p>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="people-title">
+      <h2 id="people-title">Your people</h2>
+      <p id="contacts-loading" class="muted">Loading…</p>
+
+      <div id="contacts-empty" class="empty" hidden>
+        <img class="sticker" src="img/octopus.png" alt="A busy octopus writing, reading and drinking coffee at once">
+        <p>No one here yet. Add the people you want to call home to.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table id="contacts-table" hidden>
+          <thead>
+            <tr>
+              <th>Name</th><th>City</th><th>Their time now</th><th>Call</th><th>Last called</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="contacts-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 id="form-title">Add someone</h2>
+      <form id="contact-form" class="contact-form">
+        <label>Name <input name="name" required maxlength="100" placeholder="Mum"></label>
+        <label>City <input name="city" required maxlength="100" placeholder="Seoul"></label>
+        <label>Time zone <input name="time_zone" required list="time-zones" placeholder="Asia/Seoul"></label>
+        <label>Country code <input name="country_code" required pattern="[A-Za-z]{2}" maxlength="2" placeholder="KR"></label>
+        <label>Asleep from <input name="sleep_start" type="time" required></label>
+        <label>Awake from <input name="sleep_end" type="time" required></label>
+        <label>Call length (min) <input name="call_minutes" type="number" min="5" max="240" required></label>
+        <label>Call every (days) <input name="call_every_days" type="number" min="1" max="365" required></label>
+        <datalist id="time-zones"></datalist>
+        <div class="form-buttons">
+          <button id="form-submit" type="submit">Add</button>
+          <button id="form-cancel" type="button" class="secondary" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+  </main>
 
   <script>
-    const TIMEOUT_MS = 10000; // never wait forever for a service
+    function showError(message) {
+      document.getElementById("banner-text").textContent = message;
+      document.getElementById("banner").hidden = false;
+    }
 
-    async function checkHealth(baseUrl, elementId) {
-      const el = document.getElementById(elementId);
+    function hideError() {
+      document.getElementById("banner").hidden = true;
+    }
+
+    async function checkHealth(service) {
+      const el = document.getElementById("status-" + service);
       el.textContent = "checking…";
       el.className = "";
       try {
-        const response = await fetch(baseUrl + "/health", {
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-        if (response.ok) {
-          el.textContent = "OK";
-          el.className = "ok";
-        } else {
-          el.textContent = "error (HTTP " + response.status + "), try again in a minute";
-          el.className = "down";
-        }
+        await callService(service, "/health");
+        el.textContent = "OK";
+        el.className = "ok";
       } catch (error) {
-        // Timeout, network error or CORS refusal: the service is down or still starting.
-        el.textContent = "not responding, it may be starting up, try again in a minute";
+        el.textContent = "not responding";
         el.className = "down";
+        showError(error.message);
       }
     }
 
     function checkAll() {
-      checkHealth(window.APP_CONFIG.contactsUrl, "contacts");
-      checkHealth(window.APP_CONFIG.overlapUrl, "overlap");
+      hideError();
+      checkHealth("contacts");
+      checkHealth("overlap");
     }
 
     document.getElementById("recheck").addEventListener("click", checkAll);
+    document.getElementById("banner-close").addEventListener("click", hideError);
     checkAll();
+    setUpContacts();
+    setUpSuggestions();
   </script>
 </body>
 </html>
