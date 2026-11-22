@@ -37,7 +37,9 @@ async function callService(service, path, options = {}) {
 
   if (response.status === 422 && data && Array.isArray(data.detail)) {
     // FastAPI validation errors: "city: Field required; time_zone: unknown time zone"
-    const problems = data.detail.map((d) => d.loc[d.loc.length - 1] + ": " + d.msg);
+    const problems = data.detail.map(
+      (d) => d.loc[d.loc.length - 1] + ": " + d.msg.replace(/^Value error, /, ""),
+    );
     throw new Error("Please check the form. " + problems.join("; "));
   }
   if (data && typeof data.detail === "string") {

@@ -11,6 +11,7 @@
   <!-- Service URLs: localhost in compose, Azure URLs written by the pipeline on deploy. -->
   <script src="config.js"></script>
   <script src="api.js"></script>
+  <script src="contacts.js"></script>
 </head>
 <body>
   <header>
@@ -33,6 +34,48 @@
     <span id="banner-text"></span>
     <button id="banner-close" type="button">Dismiss</button>
   </div>
+
+  <main>
+    <section class="card" aria-labelledby="people-title">
+      <h2 id="people-title">Your people</h2>
+      <p id="contacts-loading" class="muted">Loading…</p>
+
+      <div id="contacts-empty" class="empty" hidden>
+        <img class="sticker" src="img/octopus.png" alt="A busy octopus writing, reading and drinking coffee at once">
+        <p>No one here yet. Add the people you want to call home to.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table id="contacts-table" hidden>
+          <thead>
+            <tr>
+              <th>Name</th><th>City</th><th>Their time now</th><th>Call</th><th>Last called</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="contacts-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 id="form-title">Add someone</h2>
+      <form id="contact-form" class="contact-form">
+        <label>Name <input name="name" required maxlength="100" placeholder="Mum"></label>
+        <label>City <input name="city" required maxlength="100" placeholder="Seoul"></label>
+        <label>Time zone <input name="time_zone" required list="time-zones" placeholder="Asia/Seoul"></label>
+        <label>Country code <input name="country_code" required pattern="[A-Za-z]{2}" maxlength="2" placeholder="KR"></label>
+        <label>Asleep from <input name="sleep_start" type="time" required></label>
+        <label>Awake from <input name="sleep_end" type="time" required></label>
+        <label>Call length (min) <input name="call_minutes" type="number" min="5" max="240" required></label>
+        <label>Call every (days) <input name="call_every_days" type="number" min="1" max="365" required></label>
+        <datalist id="time-zones"></datalist>
+        <div class="form-buttons">
+          <button id="form-submit" type="submit">Add</button>
+          <button id="form-cancel" type="button" class="secondary" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+  </main>
 
   <script>
     function showError(message) {
@@ -68,6 +111,7 @@
     document.getElementById("recheck").addEventListener("click", checkAll);
     document.getElementById("banner-close").addEventListener("click", hideError);
     checkAll();
+    setUpContacts();
   </script>
 </body>
 </html>

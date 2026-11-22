@@ -77,4 +77,52 @@ button:hover { background: #ffffff; }
   gap: 1rem;
 }
 
+/* Cream cards for the working parts of the page. */
+main { padding-bottom: 3rem; }
+.card {
+  background: var(--cream);
+  color: var(--ink);
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  margin: 1.5rem 0;
+}
+.card h2 {
+  font-family: "Archivo", "Arial Narrow", sans-serif;
+  font-stretch: 75%;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 1.8rem;
+  margin: 0 0 1rem;
+  color: var(--blue);
+}
+.card button { background: var(--blue); color: var(--cream); }
+.card button:hover { background: var(--blue-dark); }
+.card button.secondary { background: transparent; color: var(--blue); border: 1px solid var(--blue); }
+.muted { color: #6b6455; }
+
+.empty { display: flex; align-items: center; gap: 1.5rem; }
+.empty .sticker { width: 9rem; box-shadow: none; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.55rem 0.5rem; border-bottom: 1px solid #e0d4b4; }
+th { font-size: 0.8rem; text-transform: uppercase; color: #6b6455; }
+td.actions { white-space: nowrap; text-align: right; }
+td.actions button { margin-left: 0.25rem; padding: 0.25rem 0.7rem; }
+
+.contact-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem 1rem;
+}
+.contact-form label { display: flex; flex-direction: column; font-size: 0.85rem; gap: 0.25rem; }
+.contact-form input {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #cdbf98;
+  border-radius: 8px;
+  background: #fffdf7;
+}
+.form-buttons { grid-column: 1 / -1; display: flex; gap: 0.5rem; }
+
 [hidden] { display: none !important; }
