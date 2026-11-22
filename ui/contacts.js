@@ -75,6 +75,7 @@ async function loadContacts() {
     showError(error.message);
   } finally {
     status.hidden = true;
+    loadSuggestions(); // any change to people or calls changes "This week" (suggestions.js)
   }
 }
 

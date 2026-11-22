@@ -13,6 +13,7 @@
   <script src="api.js"></script>
   <script src="contacts.js"></script>
   <script src="calls.js"></script>
+  <script src="suggestions.js"></script>
 </head>
 <body>
   <header>
@@ -37,6 +38,27 @@
   </div>
 
   <main>
+    <section class="card" aria-labelledby="week-title">
+      <h2 id="week-title">This week</h2>
+
+      <div id="week-unavailable" class="unavailable" hidden>
+        <p><strong>Suggestions unavailable right now.</strong> Your people and calls still work.</p>
+        <p id="week-error" class="muted"></p>
+        <button id="week-retry" type="button">Try again</button>
+      </div>
+
+      <div id="week-content" hidden>
+        <div id="spotlight" class="spotlight"></div>
+        <div class="table-wrap">
+          <table class="week">
+            <thead><tr id="week-head"></tr></thead>
+            <tbody id="week-body"></tbody>
+          </table>
+        </div>
+        <p id="week-zone" class="muted"></p>
+      </div>
+    </section>
+
     <section class="card" aria-labelledby="people-title">
       <h2 id="people-title">Your people</h2>
       <p id="contacts-loading" class="muted">Loading…</p>
@@ -113,6 +135,7 @@
     document.getElementById("banner-close").addEventListener("click", hideError);
     checkAll();
     setUpContacts();
+    setUpSuggestions();
   </script>
 </body>
 </html>
