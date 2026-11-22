@@ -182,8 +182,9 @@ database resumes from auto-pause.
 
 ### What runs in Azure
 
-Defined in [`infra/main.bicep`](infra/main.bicep) and
-[`infra/pipeline-identity.bicep`](infra/pipeline-identity.bicep).
+Defined in [`infra/main.bicep`](infra/main.bicep),
+[`infra/pipeline-identity.bicep`](infra/pipeline-identity.bicep) and
+[`infra/monitoring.bicep`](infra/monitoring.bicep).
 
 | Resource | Name | Settings |
 | --- | --- | --- |
@@ -196,6 +197,7 @@ Defined in [`infra/main.bicep`](infra/main.bicep) and
 | SQL database | `sdd-3b-g5-overlap-db` | Serverless Gen5 0.5-1 vCore, free offer, user `overlap_app` |
 | Storage account | `sdd3bg5ui` | Static website (`$web`), serves the UI |
 | Managed identity | `sdd-3b-g5-github` | Contributor on `rg-sdd-3b-g5` only; trusts GitHub runs on `main` |
+| Workbook + saved queries | `sdd-3b-g5 monitoring` | Request count, error rate, response time and the SLO; see [docs/monitoring.md](docs/monitoring.md) |
 
 Configuration reaches the services only through environment variables. Database
 passwords are Container Apps secrets. CORS allows only the UI's address and is handled in
