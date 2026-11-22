@@ -54,9 +54,14 @@ function renderContacts() {
     );
     const actions = document.createElement("td");
     actions.className = "actions";
-    actions.append(button("Edit", () => startEdit(c)), button("Delete", () => deleteContact(c)));
+    actions.append(
+      button(openCallsId === c.id ? "Close" : "Log a call", () => toggleCalls(c)),
+      button("Edit", () => startEdit(c)),
+      button("Delete", () => deleteContact(c)),
+    );
     row.append(actions);
     body.append(row);
+    if (openCallsId === c.id) body.append(callsPanel(c, row.cells.length)); // see calls.js
   }
 }
 
