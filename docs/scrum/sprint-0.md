@@ -76,4 +76,28 @@ branch protection needs an owner or admin.
 
 ## Retrospective
 
-_To fill in with the team: what went well, what to improve, one action for Sprint 1._
+**What went well**
+
+- Both service skeletons follow the same pattern (`/health`, request log middleware,
+  migration runner, Dockerfile with pinned dependencies and a non-root user), so either
+  service is easy to read for anyone in the team.
+- CI and branch protection were on from the first week: every change after the skeleton
+  went through a pull request, a review and a green `ci` check.
+- Roles and workstreams were clear from the start, one per member.
+
+**What to improve**
+
+- Everything was merged on the last day (10 Nov). Work that lands that late cannot be
+  integrated or fixed before the review, and the Sprint Goal was missed for that reason.
+- The integration piece (`docker-compose.yml`) depended on both services and only started
+  once they existed. It should start in parallel, against agreed ports and settings.
+- Azure access was not checked early enough: the group identity in the IE subscription
+  was still missing at the end of the sprint.
+
+**Action for Sprint 1**
+
+- Agree the API contract (endpoint names and JSON fields) on the first day, so everyone
+  can build in parallel against it, and merge small pieces during the sprint instead of
+  at the end.
+- Get a first deploy through the pipeline in the first days of Sprint 1, as the brief
+  asks, before building features on top.
