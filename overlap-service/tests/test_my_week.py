@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.holidays import HolidayService
 from app.main import create_app
 from app.schedule import (
     DatabaseUnavailable,
@@ -15,7 +16,7 @@ from app.schedule import (
     to_person,
 )
 from app.windows import BusyBlock, Person
-from tests.fakes import FakeContacts
+from tests.fakes import FakeContacts, FakeHolidaySource
 
 NOW = datetime(2026, 11, 16, 0, 0, tzinfo=UTC)  # a Monday
 USER = Person(
@@ -41,7 +42,13 @@ BLOCK = {"weekday": 0, "start": time(9, 0), "end": time(11, 0), "label": "Class"
 
 def make_client():
     settings = Settings(db_host="", run_migrations=False)
-    app = create_app(settings, contacts=FakeContacts([MUM]), clock=lambda: NOW, user=USER)
+    app = create_app(
+        settings,
+        contacts=FakeContacts([MUM]),
+        clock=lambda: NOW,
+        user=USER,
+        holidays=HolidayService(FakeHolidaySource()),
+    )
     return TestClient(app)
 
 
@@ -147,19 +154,40 @@ def test_a_new_busy_block_changes_the_suggested_windows():
         before = client.get("/suggestions?days=1").json()["suggestions"][0]["windows"]
         # Monday 16 Nov: Mum's window is 06:00-14:00 UTC = 07:00-15:00 in Madrid.
         assert before == [
-            {"start": "2026-11-16T06:00:00Z", "end": "2026-11-16T14:00:00Z", "minutes": 480}
+            {
+                "start": "2026-11-16T06:00:00Z",
+                "end": "2026-11-16T14:00:00Z",
+                "minutes": 480,
+                "holiday": None,
+            }
         ]
         client.post("/me/busy", json={"weekday": 0, "start": "10:00", "end": "12:00"})
         after = client.get("/suggestions?days=1").json()["suggestions"][0]["windows"]
     assert after == [
-        {"start": "2026-11-16T06:00:00Z", "end": "2026-11-16T09:00:00Z", "minutes": 180},
-        {"start": "2026-11-16T11:00:00Z", "end": "2026-11-16T14:00:00Z", "minutes": 180},
+        {
+            "start": "2026-11-16T06:00:00Z",
+            "end": "2026-11-16T09:00:00Z",
+            "minutes": 180,
+            "holiday": None,
+        },
+        {
+            "start": "2026-11-16T11:00:00Z",
+            "end": "2026-11-16T14:00:00Z",
+            "minutes": 180,
+            "holiday": None,
+        },
     ]
 
 
 def test_database_down_gives_a_clear_503():
     settings = Settings(db_host="", run_migrations=False)
-    app = create_app(settings, contacts=FakeContacts([MUM]), clock=lambda: NOW, user=USER)
+    app = create_app(
+        settings,
+        contacts=FakeContacts([MUM]),
+        clock=lambda: NOW,
+        user=USER,
+        holidays=HolidayService(FakeHolidaySource()),
+    )
     app.state.schedule = SqlScheduleRepository(_refuse_connection)
     with TestClient(app) as client:
         response = client.get("/me")
