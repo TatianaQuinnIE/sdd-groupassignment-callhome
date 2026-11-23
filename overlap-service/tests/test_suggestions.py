@@ -1,5 +1,6 @@
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 
+from app.holidays import Holiday
 from app.suggestions import build_suggestions
 from app.windows import Person
 
@@ -93,3 +94,52 @@ def test_unusable_contacts_are_skipped_not_fatal():
         contact(4, call_every_days="often"),  # wrong type
     ]
     assert ids(build_suggestions(contacts, NOW, 7, USER)) == [1]
+
+
+def test_a_contact_missing_a_display_field_is_skipped_not_fatal():
+    # name and city are only needed for the response, but a missing one must not crash the page.
+    without_name = {k: v for k, v in contact(2).items() if k != "name"}
+    without_country = {k: v for k, v in contact(3).items() if k != "country_code"}
+    assert ids(build_suggestions([contact(1), without_name, without_country], NOW, 7, USER)) == [1]
+
+
+KR_HOLIDAYS = [
+    Holiday(date(2026, 11, 16), "Today", "오늘"),
+    Holiday(date(2026, 11, 20), "Later this week", "이번 주"),
+    Holiday(date(2026, 12, 25), "Too far away", "먼 미래"),
+]
+
+
+def test_holidays_in_the_period_are_attached_to_the_contact():
+    [suggestion] = build_suggestions([contact(1)], NOW, 7, USER, {"KR": KR_HOLIDAYS})
+    assert [h.name for h in suggestion.holidays] == ["Today", "Later this week"]
+
+
+def test_holidays_are_matched_by_country_code_in_any_case():
+    lower = contact(1, country_code="kr")
+    [suggestion] = build_suggestions([lower], NOW, 7, USER, {"KR": KR_HOLIDAYS})
+    assert suggestion.country_code == "KR"
+    assert len(suggestion.holidays) == 2
+
+
+def test_other_countries_holidays_are_not_attached():
+    [suggestion] = build_suggestions([contact(1)], NOW, 7, USER, {"DE": KR_HOLIDAYS})
+    assert suggestion.holidays == []
+
+
+def test_without_holiday_data_contacts_have_no_holidays():
+    [suggestion] = build_suggestions([contact(1)], NOW, 7, USER)
+    assert suggestion.holidays == []
+
+
+def test_the_period_is_measured_in_the_contacts_calendar():
+    # The period runs from 16 Nov 20:00 UTC to 21 Nov 20:00 UTC. In Seoul (UTC+9) that is
+    # 17 Nov 05:00 to 22 Nov 05:00, so Seoul's 16th is outside it and Seoul's 22nd is inside,
+    # which is the opposite of what the UTC dates would say.
+    start = datetime(2026, 11, 16, 20, 0, tzinfo=UTC)
+    holidays = [
+        Holiday(date(2026, 11, 16), "Seoul 16th", "x"),
+        Holiday(date(2026, 11, 22), "Seoul 22nd", "x"),
+    ]
+    [suggestion] = build_suggestions([contact(1)], start, 5, USER, {"KR": holidays})
+    assert [h.name for h in suggestion.holidays] == ["Seoul 22nd"]

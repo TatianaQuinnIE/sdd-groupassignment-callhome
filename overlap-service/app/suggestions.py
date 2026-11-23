@@ -1,9 +1,11 @@
 """Turn contacts into ranked call suggestions. Pure functions: no HTTP and no database."""
 
 import logging
-from dataclasses import dataclass
-from datetime import UTC, datetime, time
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
+from app.holidays import Holiday, holidays_in_range
 from app.overdue import CallHistory, Overdue, overdue_status, rank_by_overdue
 from app.windows import Person, Window, find_windows
 
@@ -20,6 +22,7 @@ class ContactSuggestion:
     call_minutes: int
     overdue: Overdue
     windows: list[Window]
+    holidays: list[Holiday] = field(default_factory=list)  # in the contact's country, next days
 
 
 def _parse_time(value: str | None) -> time | None:
@@ -44,15 +47,28 @@ def _contact_person(contact: dict) -> Person:
     )
 
 
+def _local_dates(time_zone: str, now: datetime, days: int) -> tuple[date, date]:
+    """First and last calendar day of the period, as dates in the contact's time zone."""
+    zone = ZoneInfo(time_zone)
+    return now.astimezone(zone).date(), (now + timedelta(days=days)).astimezone(zone).date()
+
+
 def build_suggestions(
-    contacts: list[dict], now: datetime, days: int, user: Person
+    contacts: list[dict],
+    now: datetime,
+    days: int,
+    user: Person,
+    holidays_by_country: dict[str, list[Holiday]] | None = None,
 ) -> list[ContactSuggestion]:
     """Call windows for every contact, most overdue contact first.
 
+    holidays_by_country maps an upper-case country code to that country's holidays; each
+    contact gets the ones that fall in the period, by the contact's own calendar.
     A contact whose data cannot be used (missing field, unknown time zone) is skipped with a
     warning, so one bad record never breaks the whole page.
     """
-    usable: dict[int, tuple[dict, list[Window]]] = {}
+    holidays_by_country = holidays_by_country or {}
+    usable: dict[int, ContactSuggestion] = {}
     histories: list[CallHistory] = []
     for contact in contacts:
         try:
@@ -64,28 +80,27 @@ def build_suggestions(
                 contact["call_every_days"],
                 _parse_last_called(contact.get("last_called")),
             )
-            # Validate the overdue data here too, so a bad record is skipped now instead of
-            # crashing the ranking step below.
-            overdue_status(history.last_called, history.call_every_days, now)
-        except (KeyError, ValueError, TypeError) as exc:
-            logger.warning("skipping unusable contact %r: %s", contact.get("id"), exc)
-            continue
-        usable[history.contact_id] = (contact, windows)
-        histories.append(history)
-
-    suggestions = []
-    for ranked in rank_by_overdue(histories, now):
-        contact, windows = usable[ranked.contact_id]
-        suggestions.append(
-            ContactSuggestion(
-                contact_id=ranked.contact_id,
+            first_day, last_day = _local_dates(contact["time_zone"], now, days)
+            country = str(contact["country_code"]).upper()
+            # Every field the response needs (and the overdue maths) runs inside the try, so a
+            # bad record is skipped here and cannot crash the ranking below.
+            suggestion = ContactSuggestion(
+                contact_id=history.contact_id,
                 name=contact["name"],
                 city=contact["city"],
                 time_zone=contact["time_zone"],
-                country_code=contact["country_code"],
+                country_code=country,
                 call_minutes=contact["call_minutes"],
-                overdue=ranked.overdue,
+                overdue=overdue_status(history.last_called, history.call_every_days, now),
                 windows=windows,
+                holidays=holidays_in_range(
+                    holidays_by_country.get(country, []), first_day, last_day
+                ),
             )
-        )
-    return suggestions
+        except (KeyError, ValueError, TypeError) as exc:
+            logger.warning("skipping unusable contact %r: %s", contact.get("id"), exc)
+            continue
+        usable[history.contact_id] = suggestion
+        histories.append(history)
+
+    return [usable[ranked.contact_id] for ranked in rank_by_overdue(histories, now)]
