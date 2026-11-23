@@ -45,8 +45,9 @@ Tick an item when it is merged into `main` and meets the Definition of Done
 - [ ] **Alexandra:** `docs/data-model.md` with an ER diagram matching the migrations
 - [x] **Sanad:** Azure setup moved to our own subscription (`rg-sdd-3b-g5`, Poland Central);
       Bicep, pipeline identity and README "Live URL and Azure setup" updated (#15)
-- [ ] **Sanad:** saved Log Analytics queries (request count, error rate, p95 per service), a
+- [x] **Sanad:** saved Log Analytics queries (request count, error rate, p95 per service), a
       Workbook, and an SLO ("99% of GET /contacts under 500 ms over 7 days") with its KQL
+      (`infra/monitoring.bicep`, `docs/monitoring.md`)
 - [x] **Tatiana:** deploy health check fixed, so a green Deploy run means both apps run this
       commit's image and `/health` returns 200 (#12)
 - [x] **Tatiana:** decision record 4 (deployment and pipeline) and the README architecture
