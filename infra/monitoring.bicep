@@ -31,26 +31,38 @@ ContainerAppConsoleLogs_CL
 
 // The pipeline calls /health on every deploy; leaving it out keeps the numbers
 // about real use of the app.
+// make-series fills hours without traffic with 0, so the chart doesn't draw a
+// line straight across quiet hours.
 var requestCountQuery = '''
 RequestLogs
 | where Path != "/health"
-| summarize Requests = count() by Service, bin(TimeGenerated, 1h)
+| make-series Requests = count() default = 0 on TimeGenerated step 1h by Service
 | render timechart
+'''
+
+// One row per service for the whole time range: the numbers to quote.
+var summaryQuery = '''
+RequestLogs
+| where Path != "/health"
+| summarize Requests = count(), Errors5xx = countif(Status >= 500), p50_ms = round(percentile(DurationMs, 50), 1), p95_ms = round(percentile(DurationMs, 95), 1) by Service
+| extend ErrorRatePct = round(100.0 * Errors5xx / Requests, 2)
+| project Service, Requests, Errors5xx, ErrorRatePct, p50_ms, p95_ms
 '''
 
 var errorRateQuery = '''
 RequestLogs
 | where Path != "/health"
-| summarize Requests = count(), Errors = countif(Status >= 500) by Service, bin(TimeGenerated, 1h)
-| extend ErrorRatePct = round(100.0 * Errors / Requests, 2)
+| make-series Requests = count(), Errors = countif(Status >= 500) on TimeGenerated step 1h by Service
+| extend ErrorRatePct = series_multiply(series_divide(Errors, Requests), 100)
 | project TimeGenerated, Service, ErrorRatePct
 | render timechart
 '''
 
+// p95: 95% of requests were faster than this. p50 is in the summary table.
 var responseTimeQuery = '''
 RequestLogs
 | where Path != "/health"
-| summarize p50_ms = percentile(DurationMs, 50), p95_ms = percentile(DurationMs, 95) by Service, bin(TimeGenerated, 1h)
+| make-series p95_ms = percentile(DurationMs, 95) default = real(null) on TimeGenerated step 1h by Service
 | render timechart
 '''
 
@@ -87,8 +99,14 @@ var savedQueries = [
   }
   {
     name: 'response-time'
-    displayName: 'Response time p50 / p95 per service'
+    displayName: 'Response time p95 per service'
     query: responseTimeQuery
+    functionAlias: ''
+  }
+  {
+    name: 'summary'
+    displayName: 'Summary per service (requests, error rate, p50, p95)'
+    query: summaryQuery
     functionAlias: ''
   }
   {
@@ -119,18 +137,27 @@ resource saved 'Microsoft.OperationalInsights/workspaces/savedSearches@2020-08-0
 
 // Workbook: one page with the three charts and the SLO table. The charts
 // follow the time range picked at the top; the SLO is always the last 7 days.
-func chart(name string, title string, query string, viz string) object => {
+// The big numbers under a chart add the values of all hours together. That works
+// for request counts but means nothing for percentages or milliseconds, so those
+// charts hide them; the summary table has the real numbers. For error rate and
+// p95 an hour without traffic has no value (0/0 or empty), so the line has a gap
+// there instead of being drawn across it.
+func chart(name string, title string, query string, viz string, legend bool) object => {
   type: 3
   name: name
   content: {
     version: 'KqlItem/1.0'
     title: title
     query: query
-    size: 0
+    size: viz == 'table' ? 4 : 0
     timeContextFromParameter: 'TimeRange'
     queryType: 0
     resourceType: 'microsoft.operationalinsights/workspaces'
     visualization: viz
+    chartSettings: {
+      showMetrics: legend
+      showLegend: true
+    }
   }
 }
 
@@ -172,9 +199,10 @@ var workbook = {
         ]
       }
     }
-    chart('request-count', 'Request count per hour', requestCountQuery, 'timechart')
-    chart('error-rate', 'Error rate (5xx %) per hour', errorRateQuery, 'timechart')
-    chart('response-time', 'Response time p50 / p95 (ms)', responseTimeQuery, 'timechart')
+    chart('summary', 'Summary for the selected time range', summaryQuery, 'table', true)
+    chart('request-count', 'Request count per hour', requestCountQuery, 'timechart', true)
+    chart('error-rate', 'Error rate (5xx %) per hour', errorRateQuery, 'timechart', false)
+    chart('response-time', 'Response time p95 (ms) per hour', responseTimeQuery, 'timechart', false)
     {
       type: 3
       name: 'slo'
