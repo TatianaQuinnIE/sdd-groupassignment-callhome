@@ -7,6 +7,7 @@ Dockerfiles and Bicep). Add rows as you go, not on the last day.
 | --- | --- | --- | --- |
 | Luna | Asked Claude to match my code of overlap-service to Alexandra's code contacts-service | Claude (Sonnet 5.5) | Compared code with contacts-service, fixed a bug that caused duplicate entries in schema_migrations, added httpx2 to developer requirements to fix test failures. |
 | Luna | Asked Claude on how could I implement schedules to the algorithm.| Claude (Sonnet 5.5) | At first I asked to have both people's calendar so they can see eachothers free hours. It was a better and easier change just to add prefered call hours blocks so that each person can see when would they like to be called during their free time. |
+
 | Tatiana | CI workflow and sprint-0.md | Claude Code (Opus 5.5) | Read both files and filled in the Scrum roles |
 | Tatiana | CI checks (coverage gate, Bandit, pip-audit, gitleaks), definition-of-done.md, Sprint 0 review | Claude Code (Opus 5.5) | Read all three files before committing |
 | Sanad | Bicep file for our Azure setup and the Azure part of the README | Claude Code (Opus 5.5) | Went through it piece by piece and read each part before committing. Checked the settings against the prof's deployment guide. First deploy failed because my SQL password had part of the login name in it, so I changed it and redeployed. Opened all three URLs to make sure they work. |
@@ -21,4 +22,10 @@ Dockerfiles and Bicep). Add rows as you go, not on the last day.
 | Alicia | README "Run locally" and "Run the tests" (PR #18) | Claude Code (Opus 5.5) | Every command was run locally before it went into the README (both test suites with coverage, ruff check and format). |
 | Alicia | The UI: This week, contacts CRUD, call log, error handling and styling (PR #19) | Claude Code (Opus 5.5) | Gave the visual direction (the "Have you called home lately?" poster, the "Calling home… Mom" screen, my phone and octopus illustrations). Built it in five pieces and checked each in the browser: adding, editing and deleting people, logging calls, an invalid time zone, and the "Suggestions unavailable" message with overlap-service stopped. |
 | Alicia | Decision record 3 (frontend) | Claude Code (Opus 5.5) | Checked it matches what we built and that I can explain each point. |
+| Luna | Free call windows across time zones (`windows.py`) | Claude (Sonnet 5.5) | I tested examples for Madrid and Seoul, daylight saving time, and sleep hours that go past midnight. I also ran the tests.|
+| Luna | Overdue calls (`overdue.py`) | Claude (Sonnet 5.5) | I checked that the ranking uses days since the last call divided by the call frequency. People who have never been called come first, and ties are sorted by ID. I also checked the field names against Alexandra’s `last_called` and `call_every_days` fields. |
+| Luna | `GET /suggestions`, contacts client, and demo user (PR #17) | Claude (Sonnet 5.5) | CI failed because my files were missing a final newline. I ran `ruff format .` and pushed the fix. The review also found that one bad contact record could stop the endpoint. I added a fix to skip that record and a test for it. |
+| Luna | Public-holiday flags, Nager.Date client, SQL cache, and tests | Claude (Sonnet 5.5) | I updated two tests for the new holiday field. I also fixed a merge conflict with “My week” by starting a clean branch from `main`. I ran 151 tests and Ruff locally. |
+
+
 
