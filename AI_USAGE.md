@@ -26,6 +26,7 @@ Dockerfiles and Bicep). Add rows as you go, not on the last day.
 | Luna | Overdue calls (`overdue.py`) | Claude (Sonnet 5.5) | I checked that the ranking uses days since the last call divided by the call frequency. People who have never been called come first, and ties are sorted by ID. I also checked the field names against Alexandra’s `last_called` and `call_every_days` fields. |
 | Luna | `GET /suggestions`, contacts client, and demo user (PR #17) | Claude (Sonnet 5.5) | CI failed because my files were missing a final newline. I ran `ruff format .` and pushed the fix. The review also found that one bad contact record could stop the endpoint. I added a fix to skip that record and a test for it. |
 | Luna | Public-holiday flags, Nager.Date client, SQL cache, and tests | Claude (Sonnet 5.5) | I updated two tests for the new holiday field. I also fixed a merge conflict with “My week” by starting a clean branch from `main`. I ran 151 tests and Ruff locally. |
-
-
+| Alexandra | docs/data-model.md with the Mermaid ER diagram | Claude Code (Opus 5.5) | Checked every table and column against the four migration files, and that the diagram renders on GitHub. Asked for the overlap-service tables from Alicia's "My week" to be included. |
+| Alexandra | Decision record 1 (architecture) in docs/decisions.md | Claude Code (Opus 5.5) | Read it against our code (routes, schemas, repository) and changed anything I could not explain myself. |
+| Alexandra | docs/scrum/sprint-1.md | Claude Code (Opus 5.5) | Checked the done and not-done items against the merged pull requests from 11–18 Nov. Wrote the retrospective from the commit history (merge dates, review times, carried-over items) and asked Sanad to confirm it in the PR review. |
 
