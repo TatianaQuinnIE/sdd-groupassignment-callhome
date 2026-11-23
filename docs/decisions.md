@@ -8,6 +8,75 @@ One record per member (context, decision, alternatives, consequences).
 4. Deployment and pipeline (Tatiana)
 5. Storage and monitoring (Sanad)
 
+## 1. Architecture (Alexandra)
+
+**Context.** The brief asks for exactly two services, each in its own container with its
+own database, talking over HTTP, and a static UI that calls them from the browser. Our
+product has two kinds of work: keeping the user's people and calls (plain data, full CRUD)
+and working out when to call them (time-zone maths, the overdue ranking, the user's own
+week, and public holidays from an external API). Five people build it in three short
+sprints, so each part must be small enough for one owner to build, test and explain.
+
+**Decision.**
+
+- **contacts-service** owns the data the user types in: `contacts` and `call_logs`, with
+  full CRUD. It is the single source of truth for people and calls, and it calls no other
+  service.
+- **overlap-service** owns everything that is calculated: call windows, the overdue
+  ranking and holiday flags, plus the data only it needs (the user's week and the holiday
+  cache). It reads contacts from contacts-service with `GET /contacts` and stores no
+  contact data itself.
+- The dependency runs one way only: overlap-service calls contacts-service, never the
+  reverse. A down overlap-service or a failing Nager.Date never affects the contacts page.
+- Both services use Python 3.12 and **FastAPI**: request and response models validate
+  input and turn bad data into a clear 422, and the docs at `/docs` are generated from
+  the code.
+- **A layered structure inside each service**, with one job per file. In contacts-service:
+  - `routes.py`: the HTTP layer. Turns requests into calls and results into status codes
+    (201, 204, 404).
+  - `schemas.py`: what goes in and out, with validation (real IANA time zone, two-letter
+    country code, sensible call settings).
+  - `repository.py`: all the SQL, written by hand, with parameters (never string-built
+    queries). The rest of the code only sees Python dictionaries.
+  - `db.py`, `config.py`, `migrations.py`, `logging_middleware.py`: the connection,
+    settings from environment variables, versioned migrations on startup, one log line
+    per request.
+
+  overlap-service follows the same pattern, and keeps its algorithms (`windows.py`,
+  `overdue.py`, `suggestions.py`) as pure functions with no HTTP and no database.
+- A database that cannot be reached becomes a 503 with "Database unavailable, please try
+  again shortly", not a stack trace.
+
+**Alternatives considered.**
+
+- *Split by feature (one service for contacts and the UI's needs, one for calls):* call
+  logs and contacts change together and are joined for `last_called`, so splitting them
+  would mean an HTTP call or duplicated data for every read.
+- *Put call logs or the user's week in a third service:* not allowed (exactly two
+  services, no third container).
+- *Flask or Express:* both work, but FastAPI gives typed validation and API docs without
+  extra libraries, and the team already used Python in Assignment 2.
+- *An ORM such as SQLAlchemy:* less SQL to write, but one more dependency and layer to
+  explain. Our queries are few and short, so plain SQL in one repository file is clearer
+  and easy to review.
+- *Hexagonal (ports and adapters):* more interfaces and folders than two small services
+  need. The repository is already the one boundary we swap in tests.
+
+**Consequences.**
+
+- Each service can be built, tested, deployed and scaled to zero on its own, by its own
+  owner.
+- Because the API layer only talks to a repository, tests swap in an in-memory one: the
+  contacts API is tested without a database, and coverage of contacts-service is about
+  99%.
+- If contacts-service is down, overlap-service cannot make suggestions and answers with a
+  clear 503; the reverse case leaves contacts working. Partial failure is therefore
+  one-sided, and the demo shows the overlap-service side.
+- There is no foreign key between the services (see `docs/data-model.md`): the link is
+  each contact's `id` over HTTP. A deleted contact simply stops appearing in suggestions.
+- The SQL is written for SQL Server (Azure SQL and the local container), so moving to
+  another database would mean rewriting the repository and the migrations.
+
 ## 3. Frontend (Alicia)
 
 **Context.** The brief asks for a static UI that calls both services from the browser,
