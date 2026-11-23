@@ -8,9 +8,78 @@ One record per member (context, decision, alternatives, consequences).
 4. Deployment and pipeline (Tatiana)
 5. Storage and monitoring (Sanad)
 
+## 1. Architecture (Alexandra)
+
+**Context.** The brief asks for exactly two services, each in its own container with its
+own database, talking over HTTP, and a static UI that calls them from the browser. Our
+product has two kinds of work: keeping the user's people and calls (plain data, full CRUD)
+and working out when to call them (time-zone maths, the overdue ranking, the user's own
+week, and public holidays from an external API). Five people build it in three short
+sprints, so each part must be small enough for one owner to build, test and explain.
+
+**Decision.**
+
+- **contacts-service** owns the data the user types in: `contacts` and `call_logs`, with
+  full CRUD. It is the single source of truth for people and calls, and it calls no other
+  service.
+- **overlap-service** owns everything that is calculated: call windows, the overdue
+  ranking and holiday flags, plus the data only it needs (the user's week and the holiday
+  cache). It reads contacts from contacts-service with `GET /contacts` and stores no
+  contact data itself.
+- The dependency runs one way only: overlap-service calls contacts-service, never the
+  reverse. A down overlap-service or a failing Nager.Date never affects the contacts page.
+- Both services use Python 3.12 and **FastAPI**: request and response models validate
+  input and turn bad data into a clear 422, and the docs at `/docs` are generated from
+  the code.
+- **A layered structure inside each service**, with one job per file. In contacts-service:
+  - `routes.py`: the HTTP layer. Turns requests into calls and results into status codes
+    (201, 204, 404).
+  - `schemas.py`: what goes in and out, with validation (real IANA time zone, two-letter
+    country code, sensible call settings).
+  - `repository.py`: all the SQL, written by hand, with parameters (never string-built
+    queries). The rest of the code only sees Python dictionaries.
+  - `db.py`, `config.py`, `migrations.py`, `logging_middleware.py`: the connection,
+    settings from environment variables, versioned migrations on startup, one log line
+    per request.
+
+  overlap-service follows the same pattern, and keeps its algorithms (`windows.py`,
+  `overdue.py`, `suggestions.py`) as pure functions with no HTTP and no database.
+- A database that cannot be reached becomes a 503 with "Database unavailable, please try
+  again shortly", not a stack trace.
+
+**Alternatives considered.**
+
+- *Split by feature (one service for contacts and the UI's needs, one for calls):* call
+  logs and contacts change together and are joined for `last_called`, so splitting them
+  would mean an HTTP call or duplicated data for every read.
+- *Put call logs or the user's week in a third service:* not allowed (exactly two
+  services, no third container).
+- *Flask or Express:* both work, but FastAPI gives typed validation and API docs without
+  extra libraries, and the team already used Python in Assignment 2.
+- *An ORM such as SQLAlchemy:* less SQL to write, but one more dependency and layer to
+  explain. Our queries are few and short, so plain SQL in one repository file is clearer
+  and easy to review.
+- *Hexagonal (ports and adapters):* more interfaces and folders than two small services
+  need. The repository is already the one boundary we swap in tests.
+
+**Consequences.**
+
+- Each service can be built, tested, deployed and scaled to zero on its own, by its own
+  owner.
+- Because the API layer only talks to a repository, tests swap in an in-memory one: the
+  contacts API is tested without a database, and coverage of contacts-service is about
+  99%.
+- If contacts-service is down, overlap-service cannot make suggestions and answers with a
+  clear 503; the reverse case leaves contacts working. Partial failure is therefore
+  one-sided, and the demo shows the overlap-service side.
+- There is no foreign key between the services (see `docs/data-model.md`): the link is
+  each contact's `id` over HTTP. A deleted contact simply stops appearing in suggestions.
+- The SQL is written for SQL Server (Azure SQL and the local container), so moving to
+  another database would mean rewriting the repository and the migrations.
+
 ## 2. Non-CRUD feature: overlap algorithm, time zones, Nager.Date caching (Luna)
 
-**Context** The app should help answer two questions: when is a good time to call someone in another time zone, and who should I call first? To do this, it needs to account for time zones, sleep schedules, weekly busy hours and daylight saving changes. It also checks public holidays using Nager.Date. The API or database might be unavailale, so the app should still show call suggestions when holiday data cannot be loaded. The overlap service gets contact details from the contacts-service over HTTP; it does not access that service's database directly. 
+**Context** The app should help answer two questions: when is a good time to call someone in another time zone, and who should I call first? To do this, it needs to account for time zones, sleep schedules, weekly busy hours and daylight saving changes. It also checks public holidays using Nager.Date. The API or database might be unavailable, so the app should still show call suggestions when holiday data cannot be loaded. The overlap service gets contact details from the contacts-service over HTTP; it does not access that service's database directly.
 
 **Decision**
 - `windows.py` uses pure functions, with no database or network calls. It converts times to UTC, works out when either person is unavailable, and returns the remaining call windows that are long enough. It handles daylight-saving changes and sleep times that continue past midnight.
@@ -29,11 +98,10 @@ One record per member (context, decision, alternatives, consequences).
 
 **Consequences**
 - The functions are easy to test without a real database or network connection. I ran 151 tests locally.
-- The holiday cache does not expire automatically. A correction from Nager.Date will not show up until the cached data is cleared. 
+- The holiday cache does not expire automatically. A correction from Nager.Date will not show up until the cached data is cleared.
 - The first lookup for a new country and year takes longer because it fetches data from Nager.Date.
 - Holiday flags rely on the contact having a valid `country_code` and `time_zone`.
 - The UI uses `holidays`, `holiday` and `holidays_available` from `/suggestions`.
-
 
 ## 3. Frontend (Alicia)
 

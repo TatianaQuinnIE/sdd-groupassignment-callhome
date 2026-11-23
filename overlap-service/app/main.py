@@ -15,7 +15,10 @@ from app import db, migrations
 from app.config import Settings
 from app.contacts_client import ContactsClient, ContactsUnavailable
 from app.demo_user import DEMO_USER
+from app.holiday_cache import SqlHolidayCache
+from app.holidays import HolidayService
 from app.logging_middleware import RequestLogMiddleware
+from app.nager_client import NagerClient
 from app.routes import router as suggestions_router
 from app.routes_me import router as my_week_router
 from app.schedule import DatabaseUnavailable, InMemoryScheduleRepository, SqlScheduleRepository
@@ -33,6 +36,7 @@ def create_app(
     contacts: ContactsClient | None = None,
     clock: Callable[[], datetime] | None = None,
     user: Person | None = None,
+    holidays: HolidayService | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
 
@@ -45,7 +49,7 @@ def create_app(
             logger.info("skipping migrations (disabled or database not configured)")
         yield
 
-    app = FastAPI(title="overlap-service", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="overlap-service", version="0.3.0", lifespan=lifespan)
     app.state.contacts = contacts or ContactsClient(
         settings.contacts_service_url, settings.contacts_timeout_s
     )
@@ -56,6 +60,18 @@ def create_app(
         app.state.schedule = SqlScheduleRepository(lambda: db.connect(settings))
     else:
         app.state.schedule = InMemoryScheduleRepository(user or DEMO_USER)
+    if holidays is None:
+        # The database cache is optional. Its connection gives up quickly so a database that
+        # is waking up from auto-pause cannot hold up the page.
+        store = (
+            SqlHolidayCache(lambda: db.connect(settings, login_timeout=3, timeout=5))
+            if settings.db_configured
+            else None
+        )
+        holidays = HolidayService(
+            NagerClient(settings.nager_base_url, settings.nager_timeout_s), store
+        )
+    app.state.holidays = holidays
     app.add_middleware(RequestLogMiddleware)
     app.add_middleware(
         CORSMiddleware,
