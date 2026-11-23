@@ -175,10 +175,9 @@ The first setup we made in the IE subscription (West Europe) is still there but 
 | contacts-service | https://sdd-3b-g5-contacts.delightfulrock-fea08312.polandcentral.azurecontainerapps.io |
 | overlap-service | https://sdd-3b-g5-overlap.delightfulrock-fea08312.polandcentral.azurecontainerapps.io |
 
-Both services run the images the pipeline builds from `main`. The UI address returns 404
-until `ui/index.html` is on `main`. After a quiet period the first request can take up to a
-minute (503 "App port is not ready"), because the container starts from zero and the
-database resumes from auto-pause.
+Both services run the images the pipeline builds from `main`. After a quiet period the
+first request can take up to a minute (503 "App port is not ready"), because the
+container starts from zero and the database resumes from auto-pause.
 
 ### What runs in Azure
 
