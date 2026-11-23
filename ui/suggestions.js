@@ -14,6 +14,19 @@ function dayLabel(value, timeZone) {
   return new Intl.DateTimeFormat([], { timeZone, weekday: "short", day: "numeric" }).format(new Date(value));
 }
 
+// A holiday's "2026-11-26" is a plain day in the contact's country: format it in UTC so it
+// never shifts to the day before or after.
+function holidayDay(date) {
+  return new Intl.DateTimeFormat([], { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" })
+    .format(new Date(date + "T00:00:00Z"));
+}
+
+function holidayText(holiday) {
+  return holiday.local_name && holiday.local_name !== holiday.name
+    ? holiday.name + " (" + holiday.local_name + ")"
+    : holiday.name;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -38,6 +51,9 @@ function renderSpotlight(data) {
     timeIn(w.start, next.time_zone) + "–" + timeIn(w.end, next.time_zone) + " in " + next.city;
   const since = next.overdue.days_since === null ? "Never called yet" : "Last call " + Math.floor(next.overdue.days_since) + " days ago";
   box.append(el("p", "spotlight-name", next.name), el("p", "spotlight-when", when), el("p", "spotlight-since", since));
+  if (w.holiday) {
+    box.append(el("p", "spotlight-holiday", "It's a public holiday in " + next.city + ": " + holidayText(w.holiday)));
+  }
 }
 
 function renderWeek(data) {
@@ -62,13 +78,35 @@ function renderWeek(data) {
     for (const day of days) {
       const cell = el("td", "slots");
       for (const w of s.windows.filter((w) => dayKey(w.start, you) === day.key)) {
-        cell.append(el("span", "slot", timeIn(w.start, you) + "–" + timeIn(w.end, you)));
+        const slot = el("span", "slot", timeIn(w.start, you) + "–" + timeIn(w.end, you));
+        if (w.holiday) {
+          slot.classList.add("holiday");
+          slot.title = "Public holiday in " + s.city + ": " + holidayText(w.holiday);
+          slot.append(" 🎉");
+        }
+        cell.append(slot);
       }
       row.append(cell);
     }
     body.append(row);
   }
   document.getElementById("week-zone").textContent = "Times in your time zone (" + you + ").";
+  renderHolidays(data);
+}
+
+// Holidays in each contact's country this week, from Nager.Date via overlap-service.
+function renderHolidays(data) {
+  const items = [];
+  for (const s of data.suggestions) {
+    for (const h of s.holidays || []) {
+      items.push({ date: h.date, text: holidayDay(h.date) + " · " + holidayText(h) + " · " + s.name + " (" + s.city + ")" });
+    }
+  }
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  document.getElementById("week-holiday-list").replaceChildren(...items.map((i) => el("li", "", i.text)));
+  document.getElementById("week-holidays").hidden = items.length === 0;
+  // Nager.Date down: the windows are still right, only the holiday flags are missing.
+  document.getElementById("week-holidays-off").hidden = data.holidays_available !== false;
 }
 
 async function loadSuggestions() {
