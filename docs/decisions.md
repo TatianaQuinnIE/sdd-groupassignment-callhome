@@ -203,3 +203,49 @@ Apps is not available in the regions that subscription allows.
 - The pipeline depends on the federated credential subject matching
   `repo:TatianaQuinnIE/sdd-groupassignment-callhome:ref:refs/heads/main`. Renaming or
   transferring the repository breaks the sign-in until the credential is updated.
+
+## 5. Storage and monitoring (Sanad)
+
+**Context.** Each service needs its own data store in Azure, at almost no cost, and the
+brief asks for request logs we can query plus a dashboard with request count, error rate
+and response time, and one SLO. We run on an Azure for Students subscription with a small
+credit and five allowed regions.
+
+**Decision.**
+
+- One Azure SQL logical server (`sdd-3b-g5-sql-pl`) with one serverless database per
+  service, on the free offer (General Purpose, Gen5, 0.5-1 vCore, auto-pause when idle).
+  Each service has a contained database user that exists only in its own database
+  (`db_ddladmin`, `db_datareader`, `db_datawriter`), so it can run its migrations but can
+  never read the other service's data. The firewall allows only Azure services.
+- All Azure resources are in Bicep (`infra/`), so the setup can be repeated in another
+  subscription. That already happened once, when we moved from the IE subscription (#15).
+- Monitoring uses the Log Analytics workspace the Container Apps environment already
+  writes to. Each service logs one INFO line per request (method, path, status, duration),
+  without bodies. A saved function `RequestLogs` parses that line; saved queries and an
+  Azure Workbook show request count, 5xx error rate and p50/p95 response time per service.
+- SLO: 99% of `GET /contacts` answered without a server error in under 500 ms over 7 days,
+  because every page of the UI starts with that request. Details in
+  [`docs/monitoring.md`](monitoring.md).
+
+**Alternatives considered.**
+
+- *One shared database for both services:* simpler, but the services would be coupled
+  through tables, and the brief wants each service to own its data.
+- *Provisioned (always-on) databases:* no wake-up delay, but they cost money every hour.
+  Serverless with auto-pause is nearly free for our traffic.
+- *Application Insights with the OpenTelemetry SDK:* richer traces, but more code and
+  dependencies in both services and more data to pay for. Our log lines already hold the
+  three numbers the brief asks for.
+- *A portal dashboard instead of a Workbook:* both work, but a Workbook can be defined in
+  Bicep and keeps its queries next to the charts.
+
+**Consequences.**
+
+- Almost no running cost, but the first request after a quiet period waits for the
+  container to start and the database to resume (up to about a minute).
+- The cold-start 503 comes from Azure's ingress, not our code, so it is not in our logs
+  and the SLO does not count it.
+- Logs are kept 30 days with a 1 GB/day cap, which is plenty at INFO level.
+- The dashboard depends on the log line format. Changing `logging_middleware.py` means
+  updating the `RequestLogs` parser.
