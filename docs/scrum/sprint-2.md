@@ -56,10 +56,10 @@ Tick an item when it is merged into `main` and meets the Definition of Done
 - [x] **Tatiana:** decision record 4 (deployment and pipeline) and the README architecture
       diagram (#13)
 - [ ] **Tatiana:** rotate both database passwords (Sanad changes them in SQL, Tatiana updates
-      the GitHub secrets) and check the next deploy is green. Pending: the GitHub secrets
-      were last changed on 18 Nov.
+      the GitHub secrets) and check the next deploy is green. Not done, on purpose: see
+      "Not done" below.
 - [x] **Alexandra and Sanad:** `docs/scrum/sprint-1.md` (#27)
-- [ ] **Luna and Tatiana:** this file (status on 22 Nov in #22; final version in review)
+- [x] **Luna and Tatiana:** this file (status on 22 Nov in #22, final version in #31)
 - [x] **Everyone:** own decision record in `docs/decisions.md` (1 Alexandra #26, 2 Luna #28,
       3 Alicia #20, 4 Tatiana #13, 5 Sanad #30) and own `AI_USAGE.md` rows
 
@@ -100,15 +100,21 @@ everyone's `AI_USAGE.md` rows are on `main`.
 - Decision record 2 (#28), Luna
 - Holidays in the "This week" UI (#29), Alicia
 - Monitoring: saved queries, Workbook, SLO and decision record 5 (#30), Sanad
+- Final Sprint 2 doc with the review and retrospective (#31), Tatiana and Luna
 
 **Not done:**
 
-- Rotation of both database passwords (pending, see the backlog item above).
+- Rotation of both database passwords. We decided not to do it before the deadline. No
+  password has leaked (gitleaks is green on every run, and the passwords are only in GitHub
+  and Container Apps secrets). Rotating means Sanad changes both passwords in SQL at the
+  same moment as a deploy pushes the new secrets, and any mismatch takes the live site
+  down right before the submission and the demo. The GitHub secrets were last set on
+  18 Nov. Moved to after the submission.
 
 ## Retrospective
 
-_**Draft** by Tatiana (Scrum Master) from the Sprint 2 commit and pull-request history.
-The team confirms or changes it in the group chat and in the review of this pull request._
+_Written by Tatiana (Scrum Master) from the Sprint 2 commit and pull-request history,
+and confirmed by the team on 23 Nov._
 
 **What went well**
 
