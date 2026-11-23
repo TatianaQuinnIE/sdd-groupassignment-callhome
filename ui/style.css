@@ -176,6 +176,12 @@ table.week td.who { font-weight: 600; white-space: nowrap; }
   border-radius: 999px;
   padding: 0.05rem 0.45rem;
 }
+/* A window on a public holiday in the contact's country. */
+.slot.holiday { background: #fde3dd; border-color: var(--coral); }
+.holiday-list { margin: 0; padding-left: 1.2rem; font-size: 0.9rem; }
+.holiday-list li { margin: 0.2rem 0; }
+.spotlight-holiday { color: #ffd2c9; font-size: 0.9rem; margin-top: 0.5rem !important; }
+
 .unavailable {
   border-left: 4px solid var(--coral);
   padding: 0.25rem 0 0.25rem 1rem;
