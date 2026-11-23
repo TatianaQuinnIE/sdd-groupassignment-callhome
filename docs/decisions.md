@@ -77,6 +77,32 @@ sprints, so each part must be small enough for one owner to build, test and expl
 - The SQL is written for SQL Server (Azure SQL and the local container), so moving to
   another database would mean rewriting the repository and the migrations.
 
+## 2. Non-CRUD feature: overlap algorithm, time zones, Nager.Date caching (Luna)
+
+**Context** The app should help answer two questions: when is a good time to call someone in another time zone, and who should I call first? To do this, it needs to account for time zones, sleep schedules, weekly busy hours and daylight saving changes. It also checks public holidays using Nager.Date. The API or database might be unavailable, so the app should still show call suggestions when holiday data cannot be loaded. The overlap service gets contact details from the contacts-service over HTTP; it does not access that service's database directly.
+
+**Decision**
+- `windows.py` uses pure functions, with no database or network calls. It converts times to UTC, works out when either person is unavailable, and returns the remaining call windows that are long enough. It handles daylight-saving changes and sleep times that continue past midnight.
+- `overdue.py` sorts contacts by how overdue they are: days since the last call divided by the preferred time between calls. People who have never been called come first. Ties are sorted by id.
+- `GET /suggestions?days=N` combines the call windows and overdue ranking. The allowed range for `days` is 1–14. If contacts-service is unavailable, the endpoint returns a 503. A bad contact record is skipped so it does not stop the whole response.
+- Holiday data is checked in memory first, then in the SQL tables `holiday_cache` and `holiday_cache_status`, and then fetched from Nager.Date if needed. A lookup is made once per country and year. If a lookup fails, the failure is remembered for 60 seconds to avoid repeatedly calling an unavailable API. Regional holidays are ignored. Holiday flags use the contact's local calendar.
+- If Nager.Date or the cache is unavailable, the endpoint still returns call windows, but without holiday flags. It sets `holidays_available` to false. The cache connection has a short timeout so a paused database does not hold up the page for long.
+- The algorithm supports preferred call hours, but contacts-service and the UI do not store them yet.
+
+**Alternatives considered**
+- **Use both people's full calendars:** This would need more personal data and could create privacy concerns. Weekly busy times and preferred hours cover the main need.
+- **Call Nager.Date for every request:** This is simpler, but can be slow and makes every request depend on the API.
+- **Store holidays in contacts-service:** This would mix holiday data into the contacts service, so it was kept separate.
+- **Fail the whole request if holiday data is missing:** This would hide useful call suggestions. It is better to return the suggestions without holiday flags.
+- **Do the calculations in the browser:** This would duplicate the time-zone logic and make it harder to test consistently.
+
+**Consequences**
+- The functions are easy to test without a real database or network connection. I ran 151 tests locally.
+- The holiday cache does not expire automatically. A correction from Nager.Date will not show up until the cached data is cleared.
+- The first lookup for a new country and year takes longer because it fetches data from Nager.Date.
+- Holiday flags rely on the contact having a valid `country_code` and `time_zone`.
+- The UI uses `holidays`, `holiday` and `holidays_available` from `/suggestions`.
+
 ## 3. Frontend (Alicia)
 
 **Context.** The brief asks for a static UI that calls both services from the browser,
