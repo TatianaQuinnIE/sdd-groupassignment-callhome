@@ -312,5 +312,6 @@ Every image is tagged with its commit SHA, so going back never means rebuilding 
 ## Rules
 
 - No direct pushes to `main`. Every change goes through a pull request approved by another member.
+- A deploy only counts as done when both services answer `/health` with 200 within 3 minutes.
 - Never commit secrets. Only `.env.example` files are committed.
 - AI-assisted work is recorded in `AI_USAGE.md`.
