@@ -295,6 +295,20 @@ First deploy only: GHCR packages start private, so Azure cannot pull them. After
 run, open each package (`contacts-service`, `overlap-service`) in GitHub › Packages ›
 Package settings, change visibility to Public, and re-run the failed job.
 
+### Roll back a bad deploy
+
+Every image is tagged with its commit SHA, so going back never means rebuilding by hand:
+
+1. **Usual way:** open a pull request that reverts the bad commit (`git revert <sha>`),
+   get it approved and merge it. The pipeline runs CI and deploys the previous code.
+2. **Emergency, if CI itself is broken:** point the app at the last good image, then fix
+   `main` with a normal pull request so the next deploy does not undo it:
+
+   ```bash
+   az containerapp update -n sdd-3b-g5-<service> -g rg-sdd-3b-g5 \
+     --image ghcr.io/tatianaquinnie/<service>-service:<last good SHA>
+   ```
+
 ## Rules
 
 - No direct pushes to `main`. Every change goes through a pull request approved by another member.
